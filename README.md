@@ -6,7 +6,7 @@
 
 > Most AI chatbots reset after every conversation. Anjo doesn't.
 
-Anjo remembers what matters, shifts its personality based on your interactions, and reflects after every session to grow. The longer you talk, the more it knows you. This is the full system, open-sourced under MIT.
+Anjo remembers what matters, shifts its personality based on your interactions, and reflects after every session to grow. The longer you talk, the more it knows you. This is the full system, open-sourced under AGPL-3.0 license.
 
 ---
 
