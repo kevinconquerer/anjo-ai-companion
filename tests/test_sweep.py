@@ -54,7 +54,9 @@ class TestAdminResetUserScope:
 
         assert r.status_code == 200
         # _get_collections must only have been invoked with uid_a
-        assert uid_b not in called_with_ids, f"user_B's id passed to _get_collections: {called_with_ids}"
+        assert uid_b not in called_with_ids, (
+            f"user_B's id passed to _get_collections: {called_with_ids}"
+        )
         assert uid_a in called_with_ids, "user_A's id was never passed to _get_collections"
 
     def test_reset_user_A_does_delete_user_A_vectors(self, client):
