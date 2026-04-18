@@ -545,11 +545,9 @@ def should_skip_auth(path: str) -> bool:
             "/reset",
             "/privacy",
             "/terms",
-            "/refund",
             "/sw.js",
             "/api/auth/login",
             "/api/auth/register",
-            "/api/billing/webhook",
         }
         or path.startswith("/static")
         or path == "/admin"

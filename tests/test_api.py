@@ -1,4 +1,4 @@
-"""Tests — core API endpoints (self-core, billing, memory, story, admin)."""
+"""Tests — core API endpoints (self-core, memory, story, admin)."""
 
 from __future__ import annotations
 
@@ -21,44 +21,6 @@ class TestSelfCore:
         assert "prompt" in data
         assert isinstance(data["prompt"], str)
         assert len(data["prompt"]) > 0
-
-
-# ── Billing ───────────────────────────────────────────────────────────────────
-
-
-class TestBilling:
-    def test_status_structure(self, auth_client):
-        r = auth_client.get("/api/billing/status")
-        assert r.status_code == 200
-        d = r.json()
-        assert "tier" in d
-        assert "subscribed" in d
-        assert "daily_limit" in d
-        assert "messages_used" in d
-        assert "messages_remaining" in d
-        assert "message_credits" in d
-
-    def test_new_user_is_free(self, auth_client):
-        d = auth_client.get("/api/billing/status").json()
-        assert d["tier"] == "free"
-        assert d["subscribed"] is False
-
-    def test_free_tier_daily_limit(self, auth_client):
-        from anjo.core.subscription import FREE_DAILY_LIMIT
-
-        d = auth_client.get("/api/billing/status").json()
-        assert d["daily_limit"] == FREE_DAILY_LIMIT
-
-    def test_config_returns_payments_flag(self, auth_client):
-        r = auth_client.get("/api/billing/config")
-        assert r.status_code == 200
-        assert "payments_enabled" in r.json()
-
-    def test_status_unauthenticated(self, client):
-        assert client.get("/api/billing/status").status_code == 401
-
-    def test_config_unauthenticated(self, client):
-        assert client.get("/api/billing/config").status_code == 401
 
 
 # ── Memory ────────────────────────────────────────────────────────────────────
@@ -139,11 +101,6 @@ class TestAdmin:
         assert "email" in u
         assert "email_verified" in u
         assert "created_at" in u
-        assert "tier" in u
-        assert "balance_usd" in u
-        assert "message_credits" in u
-        assert "daily_used" in u
-        assert "daily_limit" in u
         assert "has_self_core" in u
         assert "has_memories" in u
         assert "data_size_kb" in u
@@ -164,8 +121,6 @@ class TestAdmin:
         d = client.get("/api/admin/users", headers={"X-Admin-Key": "test_admin_key"}).json()
         assert d["total"] == 1
         assert d["active_sessions"] == 0
-        assert d["subscribers"] == 0
-        assert isinstance(d["total_balance"], float)
 
     def test_wrong_admin_key(self, client):
         assert client.get("/api/admin/users", headers={"X-Admin-Key": "bad"}).status_code == 401
@@ -203,41 +158,6 @@ class TestAdminActions:
         ]
         u = next(u for u in users if u["user_id"] == uid)
         assert u["email_verified"] is True
-
-    def test_add_credits(self, client):
-        uid = self._uid(client)
-        r = client.post(
-            f"/api/admin/users/{uid}/credits?amount=10.0",
-            headers={"X-Admin-Key": "test_admin_key"},
-        )
-        assert r.status_code == 200
-        d = r.json()
-        assert d["ok"] is True
-        assert d["balance_usd"] > 0
-
-    def test_add_credits_wrong_key(self, client):
-        uid = self._uid(client)
-        r = client.post(f"/api/admin/users/{uid}/credits?amount=5", headers={"X-Admin-Key": "bad"})
-        assert r.status_code == 401
-
-    def test_set_tier_pro(self, client):
-        uid = self._uid(client)
-        r = client.post(
-            f"/api/admin/users/{uid}/tier?tier=pro",
-            headers={"X-Admin-Key": "test_admin_key"},
-        )
-        assert r.status_code == 200
-        d = r.json()
-        assert d["ok"] is True
-        assert d["tier"] == "pro"
-
-    def test_set_tier_invalid(self, client):
-        uid = self._uid(client)
-        r = client.post(
-            f"/api/admin/users/{uid}/tier?tier=vip",
-            headers={"X-Admin-Key": "test_admin_key"},
-        )
-        assert r.status_code == 400
 
     def test_reset_user(self, client):
         uid = self._uid(client)

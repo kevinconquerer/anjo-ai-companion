@@ -112,9 +112,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Only rate-limit API routes beyond this point
         if not path.startswith("/api/"):
             return await call_next(request)
-        # Provider webhooks must not be throttled by shared provider egress IPs
-        if path in ("/api/billing/webhook", "/api/billing/webhook/revenuecat"):
-            return await call_next(request)
         key = _rl_key(request)
         allowed, retry = _check_rate_limit(key, path)
         if not allowed:

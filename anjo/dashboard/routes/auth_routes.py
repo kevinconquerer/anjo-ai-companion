@@ -126,10 +126,6 @@ async def register_submit(
         # Email service unavailable — auto-verify and log them in so they're not locked out
         force_verify_email(username)
 
-    # No email provided, or email service unavailable — grant credits and log in directly
-    from anjo.core.credits import grant_initial_credits
-
-    grant_initial_credits(user["user_id"])
     response = RedirectResponse("/chat", status_code=302)
     _secure = os.environ.get("ANJO_ENV") != "dev"
     response.set_cookie(
@@ -146,9 +142,6 @@ async def verify_email(token: str = ""):
             '<p style="font-family:system-ui;text-align:center;margin-top:40px;">Invalid or expired link.</p>',
             status_code=400,
         )
-    from anjo.core.credits import grant_initial_credits
-
-    grant_initial_credits(user_id)
     return RedirectResponse("/login?verified=1", status_code=302)
 
 

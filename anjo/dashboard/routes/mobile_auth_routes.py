@@ -87,9 +87,5 @@ async def mobile_register(body: RegisterRequest):
         # Email service unavailable — auto-verify so user isn't locked out
         force_verify_email(body.username)
 
-    # Email service unavailable — grant credits and return token
-    from anjo.core.credits import grant_initial_credits
-
-    grant_initial_credits(user["user_id"])
     token = make_token(user["user_id"])
     return {"token": token, "user_id": user["user_id"]}

@@ -73,8 +73,6 @@ def set_relationship_ceiling(body: CeilingRequest, user_id: str = Depends(get_cu
 
 @router.get("/session/usage")
 def get_session_usage(user_id: str = Depends(get_current_user_id)):
-    from anjo.core.credits import cost_usd
-    from anjo.core.llm import MODEL
     from anjo.dashboard.session_store import get_session_snapshot
 
     snapshot = get_session_snapshot(user_id)
@@ -83,9 +81,7 @@ def get_session_usage(user_id: str = Depends(get_current_user_id)):
         if snapshot
         else {"input": 0, "output": 0}
     )
-    cost = cost_usd(MODEL, tokens["input"], tokens["output"])
     return {
         "input_tokens": tokens["input"],
         "output_tokens": tokens["output"],
-        "cost_usd": round(cost, 5),
     }

@@ -348,11 +348,6 @@ def run_reflection(
     if not mid_session and len(transcript) < MIN_SESSION_MESSAGES:
         return
 
-    if not mid_session:
-        from anjo.core.subscription import increment_free_sessions
-
-        increment_free_sessions(user_id)
-
     core.user_id = user_id
 
     transcript_text = "\n".join(f"{msg['role'].upper()}: {msg['content']}" for msg in transcript)

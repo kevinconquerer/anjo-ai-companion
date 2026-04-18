@@ -111,18 +111,10 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
     page = max(1, page)
     limit = max(1, min(limit, 500))
 
-    from anjo.core.credits import get_balance, get_message_credits
-    from anjo.core.subscription import get_daily_limit, get_daily_messages_used, get_tier
     from anjo.dashboard.auth import list_users
     from anjo.dashboard.session_store import get_active_session_count, get_session_status
 
     rows: list[dict] = []
-
-    def _safe(fn, default=None):
-        try:
-            return fn()
-        except Exception:
-            return default
 
     for u in list_users():
         uid = u.get("user_id", "")
@@ -151,11 +143,6 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
                 "email": u.get("email", ""),
                 "email_verified": bool(u.get("email_verified", False)),
                 "created_at": u.get("created_at", ""),
-                "tier": _safe(lambda uid=uid: get_tier(uid), "free"),
-                "balance_usd": round(_safe(lambda uid=uid: get_balance(uid), 0.0), 4),
-                "message_credits": _safe(lambda uid=uid: get_message_credits(uid), 0),
-                "daily_used": _safe(lambda uid=uid: get_daily_messages_used(uid), 0),
-                "daily_limit": _safe(lambda uid=uid: get_daily_limit(uid), 20),
                 "has_self_core": (user_dir / "self_core" / "current.json").exists(),
                 "has_memories": (user_dir / "memories").exists(),
                 "data_size_kb": round(size_bytes / 1024, 1),
@@ -177,8 +164,6 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
         "page": page,
         "pages": max(1, -(-total // limit)),
         "active_sessions": get_active_session_count(),
-        "subscribers": sum(1 for r in rows if r["tier"] != "free"),
-        "total_balance": round(sum(r["balance_usd"] for r in rows), 2),
     }
 
 
@@ -205,40 +190,6 @@ async def admin_verify(user_id: str, request: Request):
     if not changed:
         return JSONResponse({"detail": "User not found"}, status_code=404)
     return {"ok": True}
-
-
-@router.post("/api/admin/users/{user_id}/credits")
-async def admin_add_credits(user_id: str, request: Request, amount: float = 5.0):
-    if not _authorized(request):
-        return _unauth()
-    if not _validate_user_id(user_id):
-        return JSONResponse({"detail": "Invalid user_id format"}, status_code=400)
-    if amount <= 0 or amount > 1000:
-        return JSONResponse({"detail": "Amount must be 0–1000"}, status_code=400)
-    from anjo.core.credits import add_credits
-
-    new_balance = add_credits(user_id, amount)
-    return {"ok": True, "balance_usd": new_balance}
-
-
-@router.post("/api/admin/users/{user_id}/tier")
-async def admin_set_tier(user_id: str, request: Request, tier: str = "free"):
-    if not _authorized(request):
-        return _unauth()
-    if not _validate_user_id(user_id):
-        return JSONResponse({"detail": "Invalid user_id format"}, status_code=400)
-    if tier not in ("free", "pro", "premium"):
-        return JSONResponse({"detail": "Invalid tier"}, status_code=400)
-    from anjo.core.subscription import set_subscription
-
-    if tier == "free":
-        from anjo.core.db import get_db
-
-        get_db().execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
-        get_db().commit()
-    else:
-        set_subscription(user_id, status="active", tier=tier)
-    return {"ok": True, "tier": tier}
 
 
 @router.delete("/api/admin/users/{user_id}")
