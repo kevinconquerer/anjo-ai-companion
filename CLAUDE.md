@@ -4,10 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## About This Repository
 
-This is the **Anjo Scaffold** — a production-ready starter for building AI companion apps.
-It provides the infrastructure, auth, memory, and LangGraph conversation pipeline.
-The core AI personality logic (system prompt, reflection engine) has intentional stubs
-that you implement to define your own companion's character.
+This is the full **Anjo** source code — an AI companion with persistent memory, personality drift, and emotional intelligence, open-sourced under AGPL-3.0.
 
 See `README.md` for the quickstart guide and `docs/` for architecture documentation.
 
@@ -120,7 +117,7 @@ Additionally, **mid-session mini-reflection** runs every 20 messages in a backgr
 
 Reflection flow:
 1. `run_reflection()` receives the transcript (seed messages excluded to prevent double-reflection) and current `SelfCore`
-2. Your implementation analyzes the conversation and mutates SelfCore fields: OCEAN traits, attachment, desires, preoccupation, notes, relationship stage
+2. The reflection engine analyzes the conversation and mutates SelfCore fields: OCEAN traits, attachment, desires, preoccupation, notes, relationship stage
 3. Saves updated SelfCore to disk; clears the session from memory
 
 ### Memory: Dual Embeddings
@@ -134,28 +131,6 @@ Both are scoped by `user_id` in metadata. Retrieval uses cosine similarity with 
 ### Session Store
 
 `session_store.py` holds an in-memory `_sessions: dict[str, dict]` — one entry per active user. Sessions contain the live `SelfCore`, conversation history, and token accumulators. **Lost on server restart.** Sessions are cleaned up after reflection completes.
-
----
-
-## What You Need to Implement
-
-The scaffold ships two intentional stubs — these are where you define your companion:
-
-### 1. `anjo/core/prompt_builder.py` — `build_system_prompt()`
-
-This function builds the system prompt sent to Claude on every turn. It receives:
-- `core` — the companion's current SelfCore (personality, mood, relationship state)
-- `retrieved_memories` — relevant memories from ChromaDB
-- `active_emotions` — emotions appraised from the current turn
-
-Return a `(static_block, dynamic_block)` tuple. Static block is prompt-cached; dynamic is rebuilt each turn.
-
-### 2. `anjo/reflection/engine.py` — `run_reflection()`
-
-This function runs after each session ends. It receives the full transcript and current SelfCore.
-It should analyze the conversation and update the companion's personality/relationship state on disk.
-
-Both files contain detailed docstrings with the expected interface.
 
 ---
 
