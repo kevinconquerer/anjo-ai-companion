@@ -16,7 +16,10 @@ app = typer.Typer(add_completion=False)
 
 
 def _validate_env() -> None:
-    pass  # Running locally via Ollama — no API key required
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        import typer
+        typer.echo("Error: ANTHROPIC_API_KEY is not set. Add it to your .env file.", err=True)
+        raise typer.Exit(1)
 
 
 @app.command()
