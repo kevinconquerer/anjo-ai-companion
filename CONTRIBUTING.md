@@ -8,8 +8,8 @@ Thanks for your interest in contributing. Anjo is an open-source AI companion â€
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-org/anjo-scaffold.git
-cd anjo-scaffold
+git clone https://github.com/kevindechang/anjo-ai-companion
+cd anjo-ai-companion
 ./setup.sh
 
 # 2. Edit .env with your values (at minimum: ANTHROPIC_API_KEY, ANJO_SECRET, ANJO_ADMIN_SECRET)
