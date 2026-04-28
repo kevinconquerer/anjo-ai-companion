@@ -65,8 +65,8 @@
   <ul>
     <li><strong>Account data</strong> — username, email address, hashed password. We never store your plain-text password.</li>
     <li><strong>Conversation data</strong> — the messages you send and receive. These are stored on our servers and used to display your chat history, build memory, and generate personality embeddings.</li>
-    <li><strong>Usage data</strong> — daily message counts and subscription status, used to enforce tier limits.</li>
-    <li><strong>Billing data</strong> — payment is processed by RevenueCat. We store only your subscription status and tier. We never see or store your card details. RevenueCat's privacy policy governs their handling of payment data.</li>
+    <li><strong>Usage data</strong> — message counts used for rate limiting.</li>
+
     <li><strong>Device data</strong> — IP address, browser type, and device identifiers for security and fraud prevention.</li>
   </ul>
 
@@ -83,7 +83,7 @@
   <ul>
     <li>To generate responses through our AI provider (Anthropic). Your messages are sent to Anthropic's API to produce replies. Anthropic's privacy policy governs their handling of API data.</li>
     <li>To build persistent memory — summaries and embeddings of your conversations are stored locally and retrieved to give Anjo context in future sessions.</li>
-    <li>To maintain your account and subscription.</li>
+    <li>To maintain your account.</li>
     <li>To send transactional emails (email verification, password reset). We use Resend for email delivery.</li>
   </ul>
 
@@ -119,7 +119,6 @@
     <li><strong>Active accounts</strong> — your data is retained as long as your account is active</li>
     <li><strong>Deleted accounts</strong> — all personal data is permanently deleted within 30 days of account deletion</li>
     <li><strong>Conversation history</strong> — stored until you delete it or request "forget me"</li>
-    <li><strong>Financial records</strong> — retained for minimum 7 years for tax and legal compliance</li>
   </ul>
 
   <h2>Data security</h2>
@@ -129,7 +128,6 @@
   <p>Anjo uses the following third-party services to operate:</p>
   <ul>
     <li><strong>Anthropic</strong> — AI language model for generating responses. Your messages are sent to Anthropic's API for processing. <a href="https://www.anthropic.com/privacy" target="_blank">Anthropic Privacy Policy</a></li>
-    <li><strong>RevenueCat</strong> — payment processing. <a href="https://www.revenuecat.com/privacy" target="_blank">RevenueCat Privacy Policy</a></li>
     <li><strong>Resend</strong> — email delivery for transactional emails. <a href="https://resend.com/privacy" target="_blank">Resend Privacy Policy</a></li>
     <li><strong>AWS</strong> — hosting and infrastructure. Data is stored in US-based data centers.</li>
   </ul>
