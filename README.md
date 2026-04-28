@@ -1,6 +1,6 @@
 # Anjo — AI Companion
 
-[![CI](https://github.com/kevinconquerer/anjo-ai-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinconquerer/anjo-ai-companion/actions/workflows/ci.yml)
+[![CI](https://github.com/kevindechang/anjo-ai-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/kevindechang/anjo-ai-companion/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
@@ -103,7 +103,7 @@ All three files live in `data/users/{user_id}/` and are generated at runtime —
 ### Option A — Docker (fastest)
 
 ```bash
-git clone https://github.com/kevinconquerer/anjo-ai-companion
+git clone https://github.com/kevindechang/anjo-ai-companion
 cd anjo-ai-companion
 cp .env.example .env   # then edit .env and set ANTHROPIC_API_KEY
 docker compose up
@@ -118,7 +118,7 @@ Visit `http://localhost:8000`.
 **1. Clone and install**
 
 ```bash
-git clone https://github.com/kevinconquerer/anjo-ai-companion
+git clone https://github.com/kevindechang/anjo-ai-companion
 cd anjo-ai-companion
 ./setup.sh
 ```
