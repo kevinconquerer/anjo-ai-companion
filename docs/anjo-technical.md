@@ -93,9 +93,9 @@ perceive → classify ──► retrieve → appraise → respond (non-streaming
                     └──► appraise → respond
 ```
 
-> `gate_node` replaced the previous separate `classify_node + silence_node` in the live path. The compiled graph retains them for test/CLI use.
+> `gate_node` replaced the previous separate `classify_node + silence_node` in the live path. The CLI/test graph (`build_graph()`) uses `classify_node` as a simpler substitute, but the production path does not.
 
-Stack: Python 3.12, FastAPI, LangGraph (graph definition only for test/CLI), SQLite (WAL mode), ChromaDB (persistent, global collection), Claude Sonnet (main model), Claude Haiku (background/fast calls).
+Stack: Python 3.11+, FastAPI, LangGraph, SQLite (WAL mode), ChromaDB (per-user collections), Claude Sonnet (main model), Claude Haiku (background/fast calls).
 
 > **The stack** is the list of technologies used. Think of it as the ingredients list: Python is the programming language everything is written in; FastAPI handles web requests; SQLite stores data; ChromaDB stores memories; Claude Sonnet and Haiku are the AI models that power Anjo's responses.
 
@@ -169,14 +169,10 @@ The primary database. WAL (Write-Ahead Logging) enables concurrent reads without
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Auth, profile, subscription tier, `password_changed_at` |
+| `users` | Auth, profile, `password_changed_at` |
 | `messages` | Full message log per user — loaded as seed on session start |
-| `credits` | One-time credit packs |
-| `subscriptions` | Active subscription records |
-| `daily_usage` | `(user_id, date, count)` — daily message counter |
 | `facts` | Extracted user facts (JSON array, max 15, most recent first) |
 | `topic_trends` | Aggregate topic log (no `user_id` — privacy-safe analytics) |
-| `processed_transactions` | Deduplication for billing webhooks |
 
 ### ChromaDB
 
@@ -187,9 +183,8 @@ The vector database. Stores memories as embeddings so Anjo can retrieve "things 
 > **Embedding** is the process of converting text (or anything) into a list of numbers. For example, "I love jazz" and "jazz music is my favorite" would produce similar vectors even though they share only one word. This is how search engines and AI systems find relevant content without needing exact word matches.
 
 - `PersistentClient` at `data/chroma_global/`
-- Two collections: `semantic_memories` (what happened) and `emotional_memories` (how it felt)
-- All documents tagged with `user_id` metadata; queries use `where={"user_id": user_id}`
-- No per-user collection separation — one global collection, filtered on every query
+- Per-user collection pairs: `sem_{user_id}` (semantic/what happened) and `emo_{user_id}` (emotional/how it felt)
+- Each user gets isolated collections — O(1) access with no metadata pre-filter needed
 - **File:** `anjo/memory/long_term.py`
 
 > Having two collections — one for content, one for emotion — means Anjo can find a memory because it *felt* the same as the current moment, even if the topic is completely different. A conversation about losing a job and a conversation about a breakup might both feel like grief, so a message about grief could surface either memory.
@@ -1070,36 +1065,6 @@ On `get_or_create_session`, the last 6 messages from the SQLite `history` table 
 - `end_session` uses `transcript = full_history[seed_len:]` to get only new messages
 
 Seed messages are never re-reflected. Double-reflection of the same content was a previous bug now guarded by this slicing.
-
----
-
-## Subscription & Credits
-
-**File:** `anjo/core/subscription.py`, `anjo/core/credits.py`
-
-### Tiers
-
-| Tier | Daily limit | Price |
-|------|-------------|-------|
-| free | 20 | — |
-| pro | 50 | $9.99/mo |
-| premium | 100 | $24.99/mo |
-
-### Credit overflow
-
-Any tier can hold message credits (one-time packs). When daily limit is exhausted, credits are checked. If credits > 0, the message goes through and 1 credit is deducted. If both daily limit and credits are 0: `event: no_credits` SSE event is sent and the stream returns early.
-
-### Gate
-
-`can_send_message(user_id)` — checked before the LLM call. Returns True if within daily limit OR has credits.
-
-Daily usage tracked in SQLite `daily_usage (user_id, date, count)`.
-
-### Billing: RevenueCat
-
-Billing is handled via **RevenueCat** webhooks (`billing_routes.py`). `set_subscription()` handles both new subscriptions and updates with non-destructive UPSERT logic (doesn't overwrite existing RevenueCat IDs with empty strings). `processed_transactions` deduplicates webhook replays.
-
-> **Webhook** is an HTTP request that a third-party service (RevenueCat) sends to your server when something happens — like "user just subscribed." Your server receives this request and updates its database accordingly. **UPSERT** means "update if exists, insert if not" — a single database operation that handles both cases.
 
 ---
 
