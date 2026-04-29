@@ -25,7 +25,6 @@ export interface StreamCallbacks {
     attachment: AttachmentState,
   ) => void;
   onError: (error: string) => void;
-  onNoCredits?: (tier: string) => void;
   onSilent?: () => void;
 }
 
@@ -70,10 +69,6 @@ function dispatchSseEvent(eventName: string, dataRaw: string, callbacks: StreamC
         data.mood ?? DEFAULT_MOOD,
         data.attachment ?? DEFAULT_ATTACH,
       );
-      return;
-    }
-    if (eventName === 'no_credits') {
-      callbacks.onNoCredits?.(data.tier ?? 'free');
       return;
     }
     if (eventName === 'error') {
