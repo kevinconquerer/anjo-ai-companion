@@ -127,15 +127,6 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
 
         is_active, last_activity = get_session_status(uid)
 
-        # Count chat messages
-        chat_file = user_dir / "chat_history.jsonl"
-        chat_count = 0
-        if chat_file.exists():
-            try:
-                chat_count = sum(1 for line in chat_file.read_text().splitlines() if line.strip())
-            except Exception:
-                pass
-
         rows.append(
             {
                 "user_id": uid,
@@ -144,11 +135,9 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
                 "email_verified": bool(u.get("email_verified", False)),
                 "created_at": u.get("created_at", ""),
                 "has_self_core": (user_dir / "self_core" / "current.json").exists(),
-                "has_memories": (user_dir / "memories").exists(),
                 "data_size_kb": round(size_bytes / 1024, 1),
                 "is_active": is_active,
                 "last_activity": last_activity,
-                "chat_count": chat_count,
             }
         )
 
