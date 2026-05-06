@@ -6,7 +6,23 @@
 
 > Most AI chatbots reset after every conversation. Anjo doesn't.
 
-Anjo remembers what matters, shifts its personality based on your interactions, and reflects after every session to grow. The longer you talk, the more it knows you. This is the full system, open-sourced under AGPL-3.0 license.
+**[→ Try it live at anjo.love](https://anjo.love)**
+
+Create an account and start talking. Anjo remembers what you say, shifts its personality based on your interactions, and reflects after every session to grow. The longer you talk, the more it knows you.
+
+Built for the [Anthropic Hackathon](https://www.anthropic.com). Full source open-sourced under AGPL-3.0.
+
+---
+
+## What Makes It Different
+
+| | Typical chatbot | Anjo |
+|---|---|---|
+| **Memory** | None or chat log | Dual embeddings — semantic + emotional — with confidence-based framing |
+| **Personality** | Fixed system prompt | OCEAN traits that drift ±0.25 per user, anchored to a frozen baseline |
+| **Learning** | None | Three-pass reflection after every session |
+| **Emotion** | None | OCC appraisal with per-emotion carry and decay across turns |
+| **Relationship** | Resets every session | Lifecycle stages, contradiction detection, remembered commitments |
 
 ---
 
@@ -55,18 +71,6 @@ flowchart LR
 
 ---
 
-## What Makes It Different
-
-| | Typical chatbot | Anjo |
-|---|---|---|
-| **Memory** | None or chat log | Dual embeddings — semantic + emotional — with confidence-based framing |
-| **Personality** | Fixed system prompt | OCEAN traits that drift ±0.25 per user, anchored to a frozen baseline |
-| **Learning** | None | Three-pass reflection after every session |
-| **Emotion** | None | OCC appraisal with per-emotion carry and decay across turns |
-| **Relationship** | Resets every session | Lifecycle stages, contradiction detection, remembered commitments |
-
----
-
 ## Memory System
 
 Anjo uses three tiers of memory that serve different time horizons.
@@ -94,58 +98,6 @@ Anjo uses three tiers of memory that serve different time horizons.
 
 This separation is intentional. PERSONA.md makes prompt caching possible — the expensive static block is computed once and reused across turns. JOURNAL.md gives Anjo recent context without a retrieval call. ChromaDB handles anything older or more specific.
 
-All three files live in `data/users/{user_id}/` and are generated at runtime — nothing is committed to the repo.
-
----
-
-## Getting Started
-
-### Option A — Docker (fastest)
-
-```bash
-git clone https://github.com/kevindechang/anjo-ai-companion
-cd anjo-ai-companion
-cp .env.example .env   # edit .env — set ANTHROPIC_API_KEY before starting
-docker compose up
-```
-
-Visit `http://localhost:8000`.
-
-> **Note**: The server starts without an API key but will return a 500 on the first chat message. Make sure `ANTHROPIC_API_KEY` is set in `.env` before chatting.
-
-### Option B — Local Python
-
-**Requirements:** Python 3.11+, Node 18+ (for mobile)
-
-**1. Clone and install**
-
-```bash
-git clone https://github.com/kevindechang/anjo-ai-companion
-cd anjo-ai-companion
-./setup.sh
-```
-
-`setup.sh` creates a virtual environment, installs dependencies, and copies `.env.example` → `.env`.
-
-**2. Add your API key**
-
-Open `.env` and set `ANTHROPIC_API_KEY`. Everything else has sensible defaults for local dev.
-
-**3. Start the server**
-
-```bash
-source .venv/bin/activate
-ANJO_ENV=dev uvicorn anjo.dashboard.app:app --reload --port 8000
-```
-
-Visit `http://localhost:8000` and create an account.
-
-**4. Run tests**
-
-```bash
-pytest
-```
-
 ---
 
 ## System Overview
@@ -153,7 +105,7 @@ pytest
 **Core AI**
 - Personality — OCEAN traits + PAD mood with per-user drift and a frozen baseline
 - Reflection engine — three independent LLM passes after each session ends
-- Three-tier memory system (see below)
+- Three-tier memory system (see above)
 - Memory graph — typed nodes with auto-supersession and contradiction detection
 - Emotion — OCC appraisal, 9 mood-driven stances, per-emotion decay across turns
 
@@ -171,6 +123,38 @@ pytest
 - Email — Resend API (verification + password reset)
 - Billing — RevenueCat (subscriptions + credit packs)
 - Deploy — GitHub Actions CI/CD → EC2, nginx, systemd, certbot
+
+---
+
+## Run It Yourself
+
+### Option A — Docker (fastest)
+
+```bash
+git clone https://github.com/kevindechang/anjo-ai-companion
+cd anjo-ai-companion
+cp .env.example .env   # set ANTHROPIC_API_KEY
+docker compose up
+```
+
+Visit `http://localhost:8000`.
+
+### Option B — Local Python
+
+**Requirements:** Python 3.11+
+
+```bash
+git clone https://github.com/kevindechang/anjo-ai-companion
+cd anjo-ai-companion
+./setup.sh                    # creates venv, installs deps, copies .env.example
+# edit .env — set ANTHROPIC_API_KEY
+source .venv/bin/activate
+ANJO_ENV=dev uvicorn anjo.dashboard.app:app --reload --port 8000
+```
+
+```bash
+pytest   # run tests
+```
 
 ---
 
@@ -199,7 +183,7 @@ cp .env.example .env
 cd mobile && npm install && npx expo start
 ```
 
-Set `EXPO_PUBLIC_API_URL` in `mobile/.env.local` to point at your backend (`http://localhost:8000` for local dev).
+Set `EXPO_PUBLIC_API_URL` in `mobile/.env.local` to point at your backend.
 
 ---
 
