@@ -3,14 +3,21 @@
 [![CI](https://github.com/kevindechang/anjo-ai-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/kevindechang/anjo-ai-companion/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-stateful_graph-blue)](https://github.com/langchain-ai/langgraph)
+[![Claude](https://img.shields.io/badge/Claude-Sonnet_%2B_Haiku-blueviolet)](https://www.anthropic.com)
 
-> Most AI chatbots reset after every conversation. Anjo doesn't.
+> Most AI companions reset after every conversation. Anjo doesn't.
 
 **[→ Try it live at anjo.love](https://anjo.love)**
 
-Create an account and start talking. Anjo remembers what you say, shifts its personality based on your interactions, and reflects after every session to grow. The longer you talk, the more it knows you.
+---
 
-Built for the [Anthropic Hackathon](https://www.anthropic.com). Full source open-sourced under AGPL-3.0.
+## The Problem
+
+Every AI assistant today starts from zero. It doesn't know your name, your history, what you talked about last week, or how your relationship with it has evolved. No matter how good the conversation, next time it's a stranger again.
+
+Anjo is built around a different premise: the companion should change based on who you are — not just what you tell it, but how you talk, what you care about, what you avoid. OCEAN personality traits drift toward what fits you. Emotional memory accumulates. A three-pass reflection after every session deepens the relationship. The longer you talk, the more it knows you.
 
 ---
 
@@ -23,6 +30,24 @@ Built for the [Anthropic Hackathon](https://www.anthropic.com). Full source open
 | **Learning** | None | Three-pass reflection after every session |
 | **Emotion** | None | OCC appraisal with per-emotion carry and decay across turns |
 | **Relationship** | Resets every session | Lifecycle stages, contradiction detection, remembered commitments |
+
+---
+
+## How Claude is Used
+
+Anjo uses two Claude models in concert, optimized for quality and cost:
+
+| Model | Role | Rationale |
+|---|---|---|
+| **Claude Haiku** | Gate node — intent classification, memory retrieval decision, silence decision | Runs every turn — fast and cheap |
+| **Claude Haiku** | Three-pass reflection — facts, emotional read, relational weight | Runs once per session end |
+| **Claude Sonnet** | Response generation — streaming reply | Quality matters here |
+
+**Gate node design** — a single Haiku call replaces two separate LLM calls. It returns `{intent, retrieve: bool, respond: bool}`. On error it defaults to respond — Anjo never goes silent due to a classification failure.
+
+**Prompt caching** — `PERSONA.md` (the static personality narrative rebuilt only when OCEAN trait labels flip) is always the first block of every system prompt. Because it's stable across turns, Anthropic's prompt cache hits consistently, cutting input token cost for long conversations.
+
+**Conditional retrieval** — ChromaDB is only queried on ~20% of turns, when the gate node decides it's needed. Most turns run without a vector search, keeping latency low.
 
 ---
 
