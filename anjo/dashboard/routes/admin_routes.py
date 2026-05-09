@@ -127,6 +127,26 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
 
         is_active, last_activity = get_session_status(uid)
 
+        has_memories = False
+        try:
+            from anjo.memory.long_term import _get_client
+
+            chroma = _get_client()
+            col_names = [c.name for c in chroma.list_collections()]
+            has_memories = f"sem_{uid}" in col_names
+        except Exception:
+            pass
+
+        chat_count = 0
+        try:
+            from anjo.core.db import get_db
+
+            conn = get_db()
+            row = conn.execute("SELECT COUNT(*) FROM messages WHERE user_id = ?", (uid,)).fetchone()
+            chat_count = row[0] if row else 0
+        except Exception:
+            pass
+
         rows.append(
             {
                 "user_id": uid,
@@ -135,9 +155,11 @@ async def admin_users(request: Request, page: int = 1, limit: int = 100):
                 "email_verified": bool(u.get("email_verified", False)),
                 "created_at": u.get("created_at", ""),
                 "has_self_core": (user_dir / "self_core" / "current.json").exists(),
+                "has_memories": has_memories,
                 "data_size_kb": round(size_bytes / 1024, 1),
                 "is_active": is_active,
                 "last_activity": last_activity,
+                "chat_count": chat_count,
             }
         )
 
