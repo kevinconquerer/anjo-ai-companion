@@ -18,7 +18,10 @@ app = typer.Typer(add_completion=False)
 def _validate_env() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         import typer
-        typer.echo("Error: ANTHROPIC_API_KEY is not set. Add it to your .env file.", err=True)
+
+        typer.echo(
+            "Error: ANTHROPIC_API_KEY is not set. Add it to your .env file.", err=True
+        )
         raise typer.Exit(1)
 
 
@@ -39,7 +42,9 @@ def chat(
     from anjo.graph.conversation_graph import conversation_graph
 
     effective_user_id = user_id or os.environ.get("ANJO_USER_ID", "user_default")
-    session_id = f"session_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    session_id = (
+        f"session_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    )
 
     core = SelfCore.load(effective_user_id)
 
