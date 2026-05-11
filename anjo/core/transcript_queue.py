@@ -6,7 +6,6 @@ Flow:
   3. Successful reflection → pending file deleted
   4. If reflection fails → file stays, retried next startup
 """
-
 from __future__ import annotations
 
 import json

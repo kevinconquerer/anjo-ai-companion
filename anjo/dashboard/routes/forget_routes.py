@@ -1,14 +1,10 @@
 """Account management: settings, forgetting, and deletion."""
-
 from __future__ import annotations
 
 import asyncio
 import os
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-
-_USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 from anjo.dashboard.auth import (
     COOKIE_NAME,
@@ -19,6 +15,7 @@ from anjo.dashboard.auth import (
     update_email,
     update_username,
     validate_password_strength,
+    validate_username,
     verify_password,
 )
 
@@ -26,7 +23,6 @@ router = APIRouter()
 
 
 # ── Account info ──────────────────────────────────────────────────────────────
-
 
 @router.get("/account")
 def account_info(user_id: str = Depends(get_current_user_id)):
@@ -53,14 +49,8 @@ async def account_update_email(request: Request, user_id: str = Depends(get_curr
         info = get_user_info(user_id)
         username = info["username"] if info else user_id
         from anjo.core.email import send_verification_email
-
         await asyncio.to_thread(send_verification_email, new_email, username, new_token)
-    return {
-        "ok": True,
-        "verification_sent": bool(
-            result and new_email and new_token and os.environ.get("RESEND_API_KEY")
-        ),
-    }
+    return {"ok": True, "verification_sent": bool(result and new_email and new_token and os.environ.get("RESEND_API_KEY"))}
 
 
 @router.post("/account/update-username")
@@ -70,10 +60,9 @@ async def account_update_username(request: Request, user_id: str = Depends(get_c
     new_username = body.get("username", "").strip()
     if not verify_password(user_id, password):
         raise HTTPException(403, "Incorrect password.")
-    if len(new_username) < 2:
-        raise HTTPException(400, "Username must be at least 2 characters.")
-    if len(new_username) > 32 or not _USERNAME_RE.match(new_username):
-        raise HTTPException(400, "Username must be 2–32 characters (letters, numbers, _ or -).")
+    user_err = validate_username(new_username)
+    if user_err:
+        raise HTTPException(400, user_err)
     ok = update_username(user_id, new_username)
     if not ok:
         raise HTTPException(409, "Username already taken.")
@@ -84,7 +73,7 @@ async def account_update_username(request: Request, user_id: str = Depends(get_c
 async def account_change_password(request: Request, user_id: str = Depends(get_current_user_id)):
     body = await request.json()
     current = body.get("current_password", "")
-    new_pw = body.get("new_password", "")
+    new_pw  = body.get("new_password", "")
     if not verify_password(user_id, current):
         raise HTTPException(403, "Incorrect current password.")
     pw_err = validate_password_strength(new_pw)
@@ -96,7 +85,6 @@ async def account_change_password(request: Request, user_id: str = Depends(get_c
 
 # ── Forgetting & deletion ─────────────────────────────────────────────────────
 
-
 @router.post("/forget")
 async def request_forget(request: Request, user_id: str = Depends(get_current_user_id)):
     body = await request.json()
@@ -104,7 +92,6 @@ async def request_forget(request: Request, user_id: str = Depends(get_current_us
     if not verify_password(user_id, password):
         raise HTTPException(403, "Incorrect password.")
     from anjo.core.forgetting import negotiate_and_forget
-
     response = negotiate_and_forget(user_id)
     return {"response": response}
 
@@ -117,7 +104,6 @@ async def account_delete(request: Request, user_id: str = Depends(get_current_us
         raise HTTPException(403, "Incorrect password.")
     await asyncio.to_thread(delete_account, user_id)
     from fastapi.responses import JSONResponse
-
     resp = JSONResponse({"ok": True})
     resp.delete_cookie(COOKIE_NAME)
     return resp

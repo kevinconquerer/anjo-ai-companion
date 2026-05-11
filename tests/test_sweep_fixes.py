@@ -7,13 +7,13 @@ Tests cover:
   - Token verification with DB user check
   - Letter generation lock consistency
 """
-
 from __future__ import annotations
 
 import threading
 import time
 
 import pytest
+
 
 # ── Session store lock discipline ────────────────────────────────────────────
 
@@ -24,11 +24,8 @@ class TestDeleteSessionLock:
     def test_delete_session_thread_safe(self):
         """Concurrent deletes and reads should not raise."""
         from anjo.dashboard.session_store import (
-            _sessions,
-            _sessions_lock,
-            delete_session,
+            _sessions, _sessions_lock, delete_session,
         )
-
         # Set up a session manually
         with _sessions_lock:
             _sessions["lock-test-user"] = {
@@ -112,18 +109,15 @@ class TestResetSessionLockDiscipline:
     def test_reset_on_nonexistent_session(self):
         """reset_session on a missing user should return without error."""
         from anjo.dashboard.session_store import reset_session
-
         # Should not raise
         reset_session("nonexistent-user-12345")
 
     def test_reset_clears_history(self):
         """reset_session should clear conversation history."""
-        from anjo.core.self_core import SelfCore
         from anjo.dashboard.session_store import (
-            _sessions,
-            _sessions_lock,
-            reset_session,
+            _sessions, _sessions_lock, reset_session,
         )
+        from anjo.core.self_core import SelfCore
 
         user_id = "reset-hist-user"
         core = SelfCore()
@@ -186,9 +180,8 @@ class TestAdminChatPrivacy:
 
     def test_chat_history_redacted_by_default(self, auth_client):
         """Content should be redacted when include_content is not set."""
-        import os
-
         from anjo.core.db import get_db
+        import os
 
         admin_key = os.environ.get("ANJO_ADMIN_SECRET", "test_admin_key")
 
@@ -201,7 +194,6 @@ class TestAdminChatPrivacy:
 
         # Insert a chat message
         from anjo.core.history import append_message
-
         append_message(uid, "user", "this is private content")
 
         r = auth_client.get(
@@ -218,9 +210,8 @@ class TestAdminChatPrivacy:
 
     def test_chat_history_content_with_flag(self, auth_client):
         """Content should be visible when include_content=true."""
-        import os
-
         from anjo.core.db import get_db
+        import os
 
         admin_key = os.environ.get("ANJO_ADMIN_SECRET", "test_admin_key")
 
@@ -231,7 +222,6 @@ class TestAdminChatPrivacy:
         uid = row["user_id"]
 
         from anjo.core.history import append_message
-
         append_message(uid, "user", "visible content here")
 
         r = auth_client.get(
@@ -254,15 +244,14 @@ class TestTokenDBCheck:
     def test_token_rejected_after_account_deleted(self):
         """A valid token should be rejected if the user no longer exists in DB."""
         from anjo.dashboard.auth import make_token, verify_token
-
         # Token for non-existent user — DB lookup returns None → reject
         token = make_token("deleted-user-99999")
         assert verify_token(token) is None
 
     def test_token_valid_for_existing_user(self):
         """A valid token should be accepted when the user exists in DB."""
-        from anjo.core.db import get_db
         from anjo.dashboard.auth import make_token, verify_token
+        from anjo.core.db import get_db
 
         uid = "existing-user-token-test"
         db = get_db()
@@ -318,7 +307,6 @@ class TestSelfCoreUserIdSafety:
     def test_save_rejects_default_user_id(self):
         """SelfCore with user_id='default' should raise ValueError on save."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         assert core.user_id == "default"
         with pytest.raises(ValueError, match="user_id='default'"):
@@ -327,7 +315,6 @@ class TestSelfCoreUserIdSafety:
     def test_from_state_restores_user_id(self):
         """SelfCore.from_state() must set user_id correctly."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         state = core.model_dump()
         restored = SelfCore.from_state(state, "real-user-123")
@@ -343,7 +330,6 @@ class TestPADMoodBounds:
     def test_extreme_abuse_stays_bounded(self):
         """Repeated ABUSE appraisals should not push mood outside [-1, 1]."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         core.user_id = "bounds-test"
 
@@ -357,7 +343,6 @@ class TestPADMoodBounds:
     def test_extreme_positive_stays_bounded(self):
         """Repeated positive appraisals should not push mood above 1.0."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         core.user_id = "bounds-test-pos"
 
@@ -378,7 +363,6 @@ class TestOCEANBounds:
     def test_inertia_stays_bounded(self):
         """apply_inertia should never push traits outside [0, 1]."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         core.user_id = "ocean-bounds"
 
@@ -409,7 +393,6 @@ class TestAttachmentSafety:
     def test_weight_capped_at_session_pace(self):
         """Attachment weight cannot exceed session_count * 0.075."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         core.user_id = "att-cap-test"
         core.relationship.session_count = 2  # max weight = 0.15
@@ -423,7 +406,6 @@ class TestAttachmentSafety:
     def test_weight_stays_in_bounds(self):
         """Attachment weight must stay in [0, 1]."""
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         assert 0.0 <= core.attachment.weight <= 1.0
         assert 0.0 <= core.attachment.longing <= 1.0

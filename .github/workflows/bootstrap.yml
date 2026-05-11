@@ -18,7 +18,7 @@ jobs:
         run: |
           rsync -az --delete \
             -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
-            ./ ubuntu@${{ secrets.EC2_HOST }}:~/anjo/ \
+            ./ ubuntu@35.170.73.211:~/anjo/ \
             --exclude '.git'
 
       - name: Run setup script
@@ -29,7 +29,7 @@ jobs:
         run: |
           ssh -i /tmp/deploy_key \
             -o StrictHostKeyChecking=no \
-            ubuntu@${{ secrets.EC2_HOST }} \
+            ubuntu@35.170.73.211 \
             "ANTHROPIC_API_KEY='$ANTHROPIC_API_KEY' ANJO_ADMIN_SECRET='$ANJO_ADMIN_SECRET' RESEND_API_KEY='$RESEND_API_KEY' bash ~/anjo/scripts/server_setup.sh"
 
       - name: Cleanup

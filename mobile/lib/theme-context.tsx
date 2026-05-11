@@ -1,145 +1,96 @@
-/**
- * Theme Context - provides dynamic theme based on emotional state throughout the app
- */
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { ThemeColors, EmotionalState, getThemeFromPAD, DEFAULT_THEME } from './theme';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { ThemeColors, EmotionalState, getThemeFromPAD, DEFAULT_THEME, emotionalStateToValues } from './theme';
+const BORDER = 'rgba(255,255,255,0.1)';
+const DANGER = '#c97070';
+const GREEN  = '#6dbf8a';
 
-interface ThemeContextValue {
-  theme: ThemeColors;
-  emotionalState: EmotionalState;
-  updateMood: (trust?: number, valence?: number, arousal?: number, longing?: number) => void;
-  // Animated values for smooth transitions
+function lightenHex(hex: string, amount: number): string {
+  const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + amount);
+  const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + amount);
+  const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + amount);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+export interface ThemeContextValue {
+  // Core palette from getThemeFromPAD
   primary: string;
   secondary: string;
   background: string;
   surface: string;
   text: string;
   muted: string;
+  // Derived extras used across the app
+  surface2: string;
+  border: string;
+  danger: string;
+  green: string;
+  // Live emotional state
+  trust: number;
+  valence: number;
+  arousal: number;
+  longing: number;
+  updateMood: (trust: number, valence: number, arousal: number, longing: number) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
+const DEFAULT_STATE: EmotionalState = { trust: 0.5, valence: 0, arousal: 0, longing: 0 };
 
-interface ThemeProviderProps {
-  children: ReactNode;
-  initialTrust?: number;
-  initialValence?: number;
-  initialArousal?: number;
-  initialLonging?: number;
+function buildValue(
+  theme: ThemeColors,
+  state: EmotionalState,
+  updateMood: ThemeContextValue['updateMood'],
+): ThemeContextValue {
+  return {
+    ...theme,
+    surface2: lightenHex(theme.surface, 12),
+    border: BORDER,
+    danger: DANGER,
+    green: GREEN,
+    ...state,
+    updateMood,
+  };
 }
 
-export function ThemeProvider({
-  children,
-  initialTrust,
-  initialValence,
-  initialArousal,
-  initialLonging,
-}: ThemeProviderProps) {
-  const [emotionalState, setEmotionalState] = useState<EmotionalState>(() => ({
-    trust: initialTrust ?? 0.5,
-    valence: initialValence ?? 0,
-    arousal: initialArousal ?? 0,
-    longing: initialLonging ?? 0,
-  }));
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-  const [theme, setTheme] = useState<ThemeColors>(() =>
-    getThemeFromPAD(emotionalState)
-  );
-
-  // Shared values for smooth color transitions using Reanimated
-  const primaryAnim = useSharedValue(DEFAULT_THEME.primary);
-  const secondaryAnim = useSharedValue(DEFAULT_THEME.secondary);
-  const backgroundAnim = useSharedValue(DEFAULT_THEME.background);
-  const surfaceAnim = useSharedValue(DEFAULT_THEME.surface);
-  const textAnim = useSharedValue(DEFAULT_THEME.text);
-  const mutedAnim = useSharedValue(DEFAULT_THEME.muted);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<EmotionalState>(DEFAULT_STATE);
+  const [theme, setTheme] = useState<ThemeColors>(() => getThemeFromPAD(DEFAULT_STATE));
 
   const updateMood = useCallback((
-    trust?: number,
-    valence?: number,
-    arousal?: number,
-    longing?: number
+    trust: number,
+    valence: number,
+    arousal: number,
+    longing: number,
   ) => {
-    setEmotionalState(prev => {
-      const newState: EmotionalState = {
-        trust: trust ?? prev.trust,
-        valence: valence ?? prev.valence,
-        arousal: arousal ?? prev.arousal,
-        longing: longing ?? prev.longing,
-      };
-
-      // Calculate new theme
-      const newTheme = getThemeFromPAD(newState);
-      setTheme(newTheme);
-
-      // Animate to new colors (200ms transition)
-      primaryAnim.value = withTiming(newTheme.primary, { duration: 200 });
-      secondaryAnim.value = withTiming(newTheme.secondary, { duration: 200 });
-      backgroundAnim.value = withTiming(newTheme.background, { duration: 200 });
-      surfaceAnim.value = withTiming(newTheme.surface, { duration: 200 });
-      textAnim.value = withTiming(newTheme.text, { duration: 200 });
-      mutedAnim.value = withTiming(newTheme.muted, { duration: 200 });
-
-      return newState;
-    });
-  }, [primaryAnim, secondaryAnim, backgroundAnim, surfaceAnim, textAnim, mutedAnim]);
-
-  // Initialize colors on mount
-  useEffect(() => {
-    primaryAnim.value = theme.primary;
-    secondaryAnim.value = theme.secondary;
-    backgroundAnim.value = theme.background;
-    surfaceAnim.value = theme.surface;
-    textAnim.value = theme.text;
-    mutedAnim.value = theme.muted;
+    const clamped: EmotionalState = {
+      trust:   Math.max(0, Math.min(1, trust)),
+      valence: Math.max(-1, Math.min(1, valence)),
+      arousal: Math.max(-1, Math.min(1, arousal)),
+      longing: Math.max(0, Math.min(1, longing)),
+    };
+    setState(clamped);
+    setTheme(getThemeFromPAD(clamped));
   }, []);
 
-  const value: ThemeContextValue = {
-    theme,
-    emotionalState,
-    updateMood,
-    primary: theme.primary,
-    secondary: theme.secondary,
-    background: theme.background,
-    surface: theme.surface,
-    text: theme.text,
-    muted: theme.muted,
-  };
-
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={buildValue(theme, state, updateMood)}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-/**
- * Hook to access the current theme
- */
 export function useTheme(): ThemeContextValue {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    // Return default theme if not wrapped in provider (for login/register screens before auth)
-    return {
-      theme: DEFAULT_THEME,
-      emotionalState: {
-        trust: 0.5,
-        valence: 0,
-        arousal: 0,
-        longing: 0,
-      },
-      updateMood: () => {},
-      ...DEFAULT_THEME,
-    };
+  const ctx = useContext(ThemeContext);
+  if (!ctx) {
+    // Pre-auth screens (login/register) render outside ThemeProvider
+    return buildValue(DEFAULT_THEME, DEFAULT_STATE, () => {});
   }
-  return context;
+  return ctx;
 }
 
-/**
- * Quick hook for just primary color (useful for small updates)
- */
 export function usePrimaryColor(): string {
-  const { primary } = useTheme();
-  return primary;
+  return useTheme().primary;
 }
+
+export default ThemeContext;

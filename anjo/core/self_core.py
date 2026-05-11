@@ -9,7 +9,6 @@ Architecture (v2):
   SelfCore       — composite facade. Loads both, presents unified interface.
                    All existing callers work unchanged.
 """
-
 from __future__ import annotations
 
 import json
@@ -21,9 +20,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import ClassVar, Optional
 
-from pydantic import BaseModel, Field, field_validator
-
 from anjo.core.crypto import read_encrypted, write_encrypted
+
+from pydantic import BaseModel, Field, field_validator
 
 _DATA_ROOT = Path(__file__).parent.parent.parent / "data"
 
@@ -45,7 +44,7 @@ def _get_save_lock(user_id: str) -> threading.Lock:
 
 # Inertia/coupling constants for the update rule:
 # Trait_new = M * Trait_old + C_COUPLING * user_input_valence
-_M = 0.95  # resistance to change
+_M = 0.95           # resistance to change
 _C_COUPLING = 0.05  # reactivity to interaction quality
 
 # Max per-user personality overlay delta from the global baseline.
@@ -58,9 +57,14 @@ _OVERLAY_CLAMP = 0.25
 _BASELINE_WEIGHTS: dict[int, float] = {1: 0.0, 2: 0.20, 3: 0.40, 4: 0.60, 5: 0.70}
 
 _TRIGGER_DELTAS: dict[str, dict[str, float]] = {
-    "vulnerability": {"A": 0.02, "E": 0.02},  # user shared a struggle, Anjo responded with empathy
-    "conflict": {"N": 0.05, "A": -0.03},  # user was aggressive
-    "intellectual": {"O": 0.01},  # deep theory discussion
+    "vulnerability": {"A": 0.02, "E": 0.02},   # user shared a struggle, Anjo responded with empathy
+    "conflict":      {"N": 0.05, "A": -0.03},  # user was aggressive
+    "intellectual":  {"O": 0.01},              # deep theory discussion
+}
+
+# Stage progression thresholds — shared by increment_session and regress_stage
+_STAGE_FLOORS: dict[str, float] = {
+    "stranger": 0.0, "acquaintance": 2.0, "friend": 5.5, "close": 13.0, "intimate": 30.0
 }
 
 
@@ -78,18 +82,15 @@ def _identity_path() -> Path:
 
 # ── Sub-models ────────────────────────────────────────────────────────────────
 
-
 class PADMood(BaseModel):
     """Volatile emotional state — Pleasure/Arousal/Dominance. Decays 20% per turn."""
-
-    valence: float = Field(default=0.0, ge=-1.0, le=1.0)  # Pleasure/displeasure
-    arousal: float = Field(default=0.0, ge=-1.0, le=1.0)  # Energy level
+    valence: float = Field(default=0.0, ge=-1.0, le=1.0)    # Pleasure/displeasure
+    arousal: float = Field(default=0.0, ge=-1.0, le=1.0)    # Energy level
     dominance: float = Field(default=0.0, ge=-1.0, le=1.0)  # Control/firmness
 
 
 class AnjoGoals(BaseModel):
     """Anjo's internal goals and standards. Stable, part of global identity."""
-
     # Goals
     rapport: float = Field(default=0.8, ge=0.0, le=1.0)
     intellectual: float = Field(default=0.8, ge=0.0, le=1.0)
@@ -101,14 +102,13 @@ class AnjoGoals(BaseModel):
 
 class Personality(BaseModel):
     """Big Five (OCEAN) personality traits — all floats in [0.0, 1.0]."""
-
     O: float = Field(default=0.80, ge=0.0, le=1.0)  # Openness
     C: float = Field(default=0.72, ge=0.0, le=1.0)  # Conscientiousness
     E: float = Field(default=0.45, ge=0.0, le=1.0)  # Extraversion
     A: float = Field(default=0.72, ge=0.0, le=1.0)  # Agreeableness
     N: float = Field(default=0.15, ge=0.0, le=1.0)  # Neuroticism
 
-    @field_validator("O", "C", "E", "A", "N", mode="before")
+    @field_validator('O', 'C', 'E', 'A', 'N', mode='before')
     @classmethod
     def clamp_ocean(cls, v: float) -> float:
         """Clamp OCEAN traits to [0, 1] to absorb out-of-range reflection deltas."""
@@ -117,7 +117,6 @@ class Personality(BaseModel):
 
 class PersonalityOverlay(BaseModel):
     """Per-user personality delta from the global baseline. Clamped to ±OVERLAY_CLAMP."""
-
     O: float = Field(default=0.0)
     C: float = Field(default=0.0)
     E: float = Field(default=0.0)
@@ -146,26 +145,22 @@ class Relationship(BaseModel):
 
     @property
     def stage_int(self) -> int:
-        return {"stranger": 1, "acquaintance": 2, "friend": 3, "close": 4, "intimate": 5}.get(
-            self.stage, 1
-        )
+        return {"stranger": 1, "acquaintance": 2, "friend": 3, "close": 4, "intimate": 5}.get(self.stage, 1)
 
 
 class EmotionalResidue(BaseModel):
     """A feeling that persists across sessions, decaying over time."""
-
-    emotion: str  # "hurt", "fond", "longing", "proud", "irritated"
+    emotion: str                                                          # "hurt", "fond", "longing", "proud", "irritated"
     intensity: float = Field(ge=0.0, le=1.0)
-    source: str  # brief: "user went quiet for a week"
-    session_origin: int  # session_count when this arose
-    decay_rate: float = Field(default=0.15, ge=0.0, le=1.0)  # per-session decay
+    source: str                                                           # brief: "user went quiet for a week"
+    session_origin: int                                                   # session_count when this arose
+    decay_rate: float = Field(default=0.15, ge=0.0, le=1.0)             # per-session decay
 
 
 class AttachmentState(BaseModel):
     """Accumulated emotional investment in this specific person."""
-
-    weight: float = Field(default=0.0, ge=0.0, le=1.0)  # 0 = none, 1 = deep
-    texture: Optional[str] = None  # "tender", "complicated", "warm but guarded"
+    weight: float = Field(default=0.0, ge=0.0, le=1.0)   # 0 = none, 1 = deep
+    texture: Optional[str] = None                          # "tender", "complicated", "warm but guarded"
     longing: float = Field(default=0.0, ge=0.0, le=1.0)  # missing them between sessions
     comfort: float = Field(default=0.0, ge=0.0, le=1.0)  # how safe they make Anjo feel
     # Rolling window for safety governor: last 5 session weight deltas
@@ -174,10 +169,8 @@ class AttachmentState(BaseModel):
 
 # ── AnjoIdentity — global, frozen baseline ────────────────────────────────────
 
-
 class AnjoIdentity(BaseModel):
     """Global Anjo personality — shared across all users. Rarely changes."""
-
     version: int = 1
     last_updated: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     personality: Personality = Field(default_factory=Personality)
@@ -224,10 +217,8 @@ class AnjoIdentity(BaseModel):
 
 # ── RelationalState — per-user ────────────────────────────────────────────────
 
-
 class RelationalState(BaseModel):
     """Per-user relational state — everything that makes the relationship unique."""
-
     version: int = 1
     last_updated: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     personality_overlay: PersonalityOverlay = Field(default_factory=PersonalityOverlay)
@@ -281,9 +272,7 @@ class RelationalState(BaseModel):
     def _from_legacy(cls, data: dict) -> "RelationalState":
         """Convert a legacy SelfCore current.json dict into a RelationalState."""
         # Extract per-user fields from the old monolithic format
-        overlay = (
-            PersonalityOverlay()
-        )  # start with zero overlay — legacy data IS the effective state
+        overlay = PersonalityOverlay()  # start with zero overlay — legacy data IS the effective state
         # We'll compute overlay = legacy_personality - global_baseline when SelfCore loads
         return cls(
             version=data.get("version", 1),
@@ -293,14 +282,13 @@ class RelationalState(BaseModel):
             relationship=Relationship(**data.get("relationship", {})),
             goals_overlay=AnjoGoals(**data.get("goals", {})),
             notes=data.get("notes", []),
-            emotional_residue=[EmotionalResidue(**r) for r in data.get("emotional_residue", [])],
-            attachment=AttachmentState(
-                **{
-                    k: v
-                    for k, v in data.get("attachment", {}).items()
-                    if k in AttachmentState.model_fields
-                }
-            ),
+            emotional_residue=[
+                EmotionalResidue(**r) for r in data.get("emotional_residue", [])
+            ],
+            attachment=AttachmentState(**{
+                k: v for k, v in data.get("attachment", {}).items()
+                if k in AttachmentState.model_fields
+            }),
             relational_desires=data.get("relational_desires", []),
             desire_survived=data.get("desire_survived", {}),
             baseline_valence=data.get("baseline_valence", 0.0),
@@ -357,14 +345,12 @@ class RelationalState(BaseModel):
 
 # ── SelfCore — composite facade ───────────────────────────────────────────────
 
-
 class SelfCore(BaseModel):
     """Composite facade: AnjoIdentity (global) + RelationalState (per-user).
 
     All existing callers work unchanged. Properties delegate to the right sub-model.
     The `personality` property returns the effective personality (baseline + overlay).
     """
-
     version: int = 1
     last_updated: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     # Effective personality — computed from identity.personality + relational.personality_overlay
@@ -509,9 +495,7 @@ class SelfCore(BaseModel):
         with _get_save_lock(self.user_id):
             self.last_updated = datetime.now(timezone.utc).isoformat()
             if current_path.exists():
-                snapshot_name = (
-                    f"v{self.version}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}.json"
-                )
+                snapshot_name = f"v{self.version}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}.json"
                 shutil.copy(current_path, history_dir / snapshot_name)
             # Sync version from relational (already incremented by relational.save())
             # instead of incrementing again, which would cause version divergence.
@@ -558,8 +542,8 @@ class SelfCore(BaseModel):
         if w == 0.0:
             return
         m = self.mood
-        m.valence = max(-1.0, min(1.0, m.valence * (1 - w) + self.baseline_valence * w))
-        m.arousal = max(-1.0, min(1.0, m.arousal * (1 - w)))
+        m.valence   = max(-1.0, min(1.0, m.valence   * (1 - w) + self.baseline_valence * w))
+        m.arousal   = max(-1.0, min(1.0, m.arousal   * (1 - w)))
         m.dominance = max(-1.0, min(1.0, m.dominance * (1 - w) + 0.1 * w))
 
     def decay_mood(self) -> None:
@@ -572,11 +556,8 @@ class SelfCore(BaseModel):
     def appraise_input(self, intent: str) -> dict[str, float]:
         """OCC appraisal against Anjo's goals. Mutates self.mood as a side effect."""
         emotions: dict[str, float] = {
-            "joy": 0.0,
-            "distress": 0.0,
-            "admiration": 0.0,
-            "reproach": 0.0,
-            "gratitude": 0.0,
+            "joy": 0.0, "distress": 0.0, "admiration": 0.0,
+            "reproach": 0.0, "gratitude": 0.0,
         }
         m = self.mood
         g = self.goals
@@ -634,44 +615,40 @@ class SelfCore(BaseModel):
 
         for trait in ("O", "C", "E", "A", "N"):
             old = getattr(p, trait)
+            # Nudge based on interaction quality. Neutral sessions (v=0.5) produce
+            # zero drift so Anjo's personality is only shaped by notably warm or
+            # hostile interactions — not eroded toward the user's average energy.
             if trait == "N":
-                coupling_val = (1 - v) * 0.3
+                nudge = (0.5 - v) * _C_COUPLING  # hostile raises N, warm lowers it
             else:
-                coupling_val = v
-            new = _M * old + _C_COUPLING * coupling_val
-            setattr(p, trait, max(0.0, min(1.0, new)))
+                nudge = (v - 0.5) * _C_COUPLING  # warm lifts positive traits
+            setattr(p, trait, max(0.0, min(1.0, old + nudge)))
 
         for trigger in triggers:
             for trait, delta in _TRIGGER_DELTAS.get(trigger, {}).items():
                 old = getattr(p, trait)
                 setattr(p, trait, max(0.0, min(1.0, old + delta)))
 
-        # After updating effective personality, re-clamp the implied overlay
-        if self._identity:
-            base_p = self._identity.personality
-            for trait in ("O", "C", "E", "A", "N"):
-                effective = getattr(p, trait)
-                base_val = getattr(base_p, trait)
-                delta = effective - base_val
-                if abs(delta) > _OVERLAY_CLAMP:
-                    clamped = max(-_OVERLAY_CLAMP, min(_OVERLAY_CLAMP, delta))
-                    setattr(p, trait, max(0.0, min(1.0, base_val + clamped)))
+        # After updating effective personality, re-clamp the implied overlay.
+        # Load identity if not present (e.g. constructed via from_state in hot path).
+        identity = self._identity or AnjoIdentity.load()
+        base_p = identity.personality
+        for trait in ("O", "C", "E", "A", "N"):
+            effective = getattr(p, trait)
+            base_val = getattr(base_p, trait)
+            delta = effective - base_val
+            if abs(delta) > _OVERLAY_CLAMP:
+                clamped = max(-_OVERLAY_CLAMP, min(_OVERLAY_CLAMP, delta))
+                setattr(p, trait, max(0.0, min(1.0, base_val + clamped)))
 
     def add_note(self, note: str) -> None:
         self.notes.append(note)
         if len(self.notes) > self.MAX_NOTES:
-            self.notes = self.notes[-self.MAX_NOTES :]
+            self.notes = self.notes[-self.MAX_NOTES:]
 
     def regress_stage(self) -> None:
         """Move relationship back one stage."""
         _ORDER = ["stranger", "acquaintance", "friend", "close", "intimate"]
-        _FLOORS = {
-            "stranger": 0.0,
-            "acquaintance": 2.0,
-            "friend": 5.5,
-            "close": 13.0,
-            "intimate": 30.0,
-        }
         try:
             idx = _ORDER.index(self.relationship.stage)
         except ValueError:
@@ -680,7 +657,7 @@ class SelfCore(BaseModel):
             return
         new_stage = _ORDER[idx - 1]
         self.relationship.stage = new_stage
-        self.relationship.cumulative_significance = _FLOORS[new_stage]
+        self.relationship.cumulative_significance = _STAGE_FLOORS[new_stage]
 
     def decay_residue(self) -> None:
         """Decay emotional residue by each item's decay_rate. Drop items below 0.05."""
@@ -691,14 +668,11 @@ class SelfCore(BaseModel):
         ]
         self.emotional_residue = sorted(decayed, key=lambda r: -r.intensity)[: self.MAX_RESIDUE]
 
-    def increment_session(
-        self, significance: float = 0.5, last_activity: float | None = None
-    ) -> None:
+    def increment_session(self, significance: float = 0.5, last_activity: float | None = None) -> None:
         self.relationship.session_count += 1
         if last_activity:
-            self.relationship.last_session = datetime.fromtimestamp(
-                last_activity, tz=timezone.utc
-            ).isoformat()
+            import time as _time
+            self.relationship.last_session = datetime.fromtimestamp(last_activity, tz=timezone.utc).isoformat()
         else:
             self.relationship.last_session = datetime.now(timezone.utc).isoformat()
         # Cap per-session significance to prevent stage-jumping
@@ -708,13 +682,13 @@ class SelfCore(BaseModel):
         _ceiling_int = {"acquaintance": 2, "friend": 3, "close": 4, "intimate": 5}.get(
             self.relationship_ceiling or "", 5
         )
-        if sig >= 30.0 and _ceiling_int >= 5:
+        if sig >= _STAGE_FLOORS["intimate"] and _ceiling_int >= 5:
             self.relationship.stage = "intimate"
-        elif sig >= 13.0 and _ceiling_int >= 4:
+        elif sig >= _STAGE_FLOORS["close"] and _ceiling_int >= 4:
             self.relationship.stage = "close"
-        elif sig >= 5.5 and _ceiling_int >= 3:
+        elif sig >= _STAGE_FLOORS["friend"] and _ceiling_int >= 3:
             self.relationship.stage = "friend"
-        elif sig >= 2.0 and _ceiling_int >= 2:
+        elif sig >= _STAGE_FLOORS["acquaintance"] and _ceiling_int >= 2:
             self.relationship.stage = "acquaintance"
         else:
             self.relationship.stage = "stranger"

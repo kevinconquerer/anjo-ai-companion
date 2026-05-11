@@ -85,8 +85,8 @@ export default function Register() {
         Alert.alert('Verify your email', result.message);
         router.replace('/(auth)/login');
       }
-    } catch (e: any) {
-      Alert.alert('Registration failed', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Registration failed', e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }

@@ -3,7 +3,6 @@
 Sliding-window in-memory rate limiter (single process). Stores hit timestamps
 per key and prunes on each check. Good enough until multi-worker deployment.
 """
-
 from __future__ import annotations
 
 import threading
@@ -16,21 +15,24 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from anjo.dashboard.auth import _token_from_request, verify_token
 
+
 _rl_lock = threading.Lock()
 _rl_hits: dict[str, list[float]] = defaultdict(list)
 
 # (path_prefix, window_seconds, max_hits)
 _RL_RULES = [
-    ("/api/chat", 60, 30),  # chat stream — 30/min per user (scripts stopped here)
-    ("/api/billing", 60, 20),  # billing — 20/min per user
-    ("/api/auth", 60, 10),  # auth — 10/min per IP (brute force)
-    ("/api/", 60, 120),  # all other API — 120/min per user
+    ("/api/chat",              60, 30),   # chat stream — 30/min per user
+    ("/api/voice/transcribe",  60, 20),   # Whisper — 20/min per user (API cost)
+    ("/api/voice/speak",       60, 30),   # TTS — 30/min per user
+    ("/api/billing",           60, 20),   # billing — 20/min per user
+    ("/api/auth",              60, 10),   # auth — 10/min per IP (brute force)
+    ("/api/",                  60, 120),  # all other API — 120/min per user
 ]
 
 _WEB_AUTH_PATHS = {"/login", "/forgot", "/reset", "/register", "/admin"}
 
-_WEB_AUTH_RL_WINDOW = 60  # seconds
-_WEB_AUTH_RL_MAX = 10  # requests per window
+_WEB_AUTH_RL_WINDOW = 60   # seconds
+_WEB_AUTH_RL_MAX    = 10   # requests per window
 
 
 def _rl_key(request: Request) -> str:
@@ -54,7 +56,7 @@ def _rl_key(request: Request) -> str:
     if path.startswith("/api/auth"):
         return f"ip:{ip}"
     token = _token_from_request(request)
-    uid = verify_token(token) if token else None
+    uid   = verify_token(token) if token else None
     return f"u:{uid}" if uid else f"ip:{ip}"
 
 
@@ -111,6 +113,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         # Only rate-limit API routes beyond this point
         if not path.startswith("/api/"):
+            return await call_next(request)
+        # Provider webhooks must not be throttled by shared provider egress IPs
+        if path in ("/api/billing/webhook", "/api/billing/webhook/revenuecat"):
             return await call_next(request)
         key = _rl_key(request)
         allowed, retry = _check_rate_limit(key, path)

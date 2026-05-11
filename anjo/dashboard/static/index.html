@@ -407,6 +407,36 @@
 
     .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); opacity: 1; }
 
+    #mic-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    #mic-btn:hover { border-color: var(--accent); opacity: 1; }
+    #mic-btn.recording { background: var(--red, #e05); border-color: var(--red, #e05); animation: pulse-mic 1s infinite; }
+    @keyframes pulse-mic { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    #voice-mode-toggle {
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 6px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    #voice-mode-toggle.active { color: var(--accent); border-color: var(--accent); }
+
     .btn-danger {
       background: transparent;
       color: var(--red);
@@ -625,8 +655,12 @@
       <div class="chat-thread" id="chat-thread"></div>
       <div class="chat-input-area">
         <div class="chat-input-row">
+          <button id="mic-btn" title="Click to record voice" onclick="toggleRecording()">🎤</button>
           <textarea id="chat-input" placeholder="Type a message..." rows="1"></textarea>
           <button class="btn" id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+          <span id="voice-mode-toggle" onclick="toggleVoiceMode()" title="Auto-play Anjo's responses">🔊 voice off</span>
         </div>
       </div>
     </div>
@@ -674,6 +708,10 @@
   <script>
     const sessionId = 'main';
     let isStreaming = false;
+    let voiceMode = false;
+    let _currentAnjoText = '';
+    let _mediaRecorder = null;
+    let _audioChunks = [];
 
     // ── End session on tab close ─────────────────────────────────────────
     async function _endSessionQuietly() {
@@ -1167,6 +1205,7 @@
           if (active_emotions) renderEmotions(active_emotions);
           finishStreaming();
           loadUsage();
+          if (voiceMode && _currentAnjoText) speakText(_currentAnjoText);
         });
 
         es.addEventListener('error', (e) => {
@@ -1196,6 +1235,108 @@
       input.focus();
     }
 
+    // ── Voice mode toggle ─────────────────────────────────────
+    let _audioUnlocked = false;
+
+    function _unlockAudio() {
+      if (_audioUnlocked) return;
+      // Play a silent buffer inside a user gesture to satisfy autoplay policy
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.close();
+      _audioUnlocked = true;
+    }
+
+    function toggleVoiceMode() {
+      voiceMode = !voiceMode;
+      if (voiceMode) _unlockAudio();
+      const el = document.getElementById('voice-mode-toggle');
+      el.textContent = voiceMode ? '🔊 voice on' : '🔊 voice off';
+      el.classList.toggle('active', voiceMode);
+    }
+
+    // ── TTS: speak Anjo's response ────────────────────────────
+    async function speakText(text) {
+      try {
+        const res = await fetch('/api/voice/speak', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({text}),
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        audio.play().catch(() => {
+          URL.revokeObjectURL(url);
+          // Autoplay still blocked — disable voice mode so user knows
+          voiceMode = false;
+          const el = document.getElementById('voice-mode-toggle');
+          el.textContent = '🔊 voice off';
+          el.classList.remove('active');
+          appendSystemMsg('Voice blocked by browser — click 🔊 to re-enable', false);
+        });
+      } catch (e) {
+        console.error('TTS error:', e);
+      }
+    }
+
+    // ── STT: mic recording ────────────────────────────────────
+    async function toggleRecording() {
+      const btn = document.getElementById('mic-btn');
+      if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+        _mediaRecorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        _audioChunks = [];
+        _mediaRecorder = new MediaRecorder(stream);
+        _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _audioChunks.push(e.data); };
+        _mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          btn.classList.remove('recording');
+          btn.textContent = '🎤';
+          const blob = new Blob(_audioChunks, {type: 'audio/webm'});
+          await transcribeAndSend(blob);
+        };
+        _mediaRecorder.start();
+        btn.classList.add('recording');
+        btn.textContent = '⏹';
+      } catch (e) {
+        appendSystemMsg('Microphone access denied', true);
+      }
+    }
+
+    async function transcribeAndSend(audioBlob) {
+      const input = document.getElementById('chat-input');
+      input.placeholder = 'Transcribing...';
+      try {
+        const form = new FormData();
+        form.append('audio', audioBlob, 'audio.webm');
+        const res = await fetch('/api/voice/transcribe', {method: 'POST', body: form, credentials: 'same-origin'});
+        const data = await res.json();
+        if (data.text) {
+          input.value = data.text;
+          input.style.height = 'auto';
+          input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+          sendMessage();
+        } else {
+          appendSystemMsg('Could not transcribe audio', true);
+        }
+      } catch (e) {
+        appendSystemMsg('Transcription error: ' + e.message, true);
+      } finally {
+        input.placeholder = 'Type a message...';
+      }
+    }
+
     function appendUserMsg(text) {
       const thread = document.getElementById('chat-thread');
       thread.innerHTML += `<div class="msg user">
@@ -1206,6 +1347,7 @@
     }
 
     function appendAnjoBubble() {
+      _currentAnjoText = '';
       const thread = document.getElementById('chat-thread');
       const el = document.createElement('div');
       el.className = 'msg anjo';
@@ -1218,6 +1360,7 @@
     }
 
     function appendToAnjoBubble(el, chunk) {
+      _currentAnjoText += chunk;
       const bubble = el.querySelector('.msg-bubble');
       // Remove typing indicator on first token
       const typing = bubble.querySelector('.typing-indicator');

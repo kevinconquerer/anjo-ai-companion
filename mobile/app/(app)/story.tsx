@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
-  ActivityIndicator, ScrollView, StyleSheet, Text,
+  ActivityIndicator, Alert, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
 import { Stack } from 'expo-router';
@@ -18,6 +18,14 @@ const STAGE_LABELS: Record<string, string> = {
   close:      'Close',
   intimate:   'Intimate',
 };
+
+type StoryColors = {
+  bg: string; surface: string; surface2: string; border: string;
+  accent: string; text: string; muted: string; danger: string; green: string;
+};
+
+// StyleSheet.create output — typed as Record to avoid a massive inline type declaration
+type StoryStyles = Record<string, object>;
 
 function formatDate(iso?: string) {
   if (!iso) return '';
@@ -115,7 +123,7 @@ export default function Story() {
       setLetter(let_);
       setMemoryGraph(graph?.memory_graph ?? {});
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -128,7 +136,7 @@ export default function Story() {
   const toneColor = (tone?: string) => {
     if (!tone) return C.muted;
     const key = Object.keys(TONE_COLORS).find((k) => tone.toLowerCase().includes(k));
-    return key ? TONE_COLORS[key] : C.muted;
+    return key ? (TONE_COLORS as Record<string, string>)[key] : C.muted;
   };
 
   return (
@@ -169,7 +177,7 @@ export default function Story() {
 
 // ── Memories tab ──────────────────────────────────────────────────────────────
 
-function Stat({ label, value, styles, accent }: { label: string; value: string; styles: any; accent: string }) {
+function Stat({ label, value, styles, accent }: { label: string; value: string; styles: StoryStyles; accent: string }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -178,9 +186,21 @@ function Stat({ label, value, styles, accent }: { label: string; value: string; 
   );
 }
 
-function MemoriesTab({ memories, stageNum, memoryGraph, onRefresh, styles, C, toneColor }: any) {
+interface MemoriesTabProps {
+  memories: StoryMemories | null;
+  stageNum: number;
+  memoryGraph: Record<string, MemoryNode[]>;
+  onRefresh: () => void;
+  styles: StoryStyles;
+  C: StoryColors;
+  toneColor: (tone?: string) => string;
+}
+
+function MemoriesTab({ memories, stageNum, memoryGraph, onRefresh, styles, C, toneColor }: MemoriesTabProps) {
   const handleDeleteNode = async (nodeId: string) => {
-    try { await api.story.deleteMemoryNode(nodeId); onRefresh(); } catch (e) { console.error(e); }
+    try { await api.story.deleteMemoryNode(nodeId); onRefresh(); } catch {
+      Alert.alert('Could not delete memory', 'Please try again.');
+    }
   };
 
   if (!memories) return <EmptyState text="No memories yet. Start a conversation with Anjo." />;
@@ -214,7 +234,7 @@ function MemoriesTab({ memories, stageNum, memoryGraph, onRefresh, styles, C, to
       <View style={styles.card}><Text style={styles.bodyText}>{opinion ?? "Anjo hasn't formed an opinion yet."}</Text></View>
 
       <Text style={styles.sectionLabel}>EMOTIONAL RESIDUE</Text>
-      {emotional_residue?.length ? emotional_residue.map((r: any, i: number) => (
+      {emotional_residue?.length ? emotional_residue.map((r, i) => (
         <View key={i} style={styles.card}>
           <View style={styles.residueHeader}>
             <Text style={styles.residueLabel}>{r.emotion}</Text>
@@ -239,7 +259,7 @@ function MemoriesTab({ memories, stageNum, memoryGraph, onRefresh, styles, C, to
         </View>
       </View>
 
-      {Object.entries(memoryGraph).map(([type, nodes]) => (
+      {(Object.entries(memoryGraph) as [string, MemoryNode[]][]).map(([type, nodes]) => (
         <View key={type}>
           <Text style={styles.sectionLabel}>{type.toUpperCase()}</Text>
           <View style={styles.card}>{nodes?.length ? nodes.map((n) => renderNode(n, type)) : <Text style={styles.bodyText}>No {type} nodes.</Text>}</View>
@@ -251,7 +271,14 @@ function MemoriesTab({ memories, stageNum, memoryGraph, onRefresh, styles, C, to
 
 // ── Timeline tab ──────────────────────────────────────────────────────────────
 
-function TimelineTab({ sessions, styles, C, toneColor }: any) {
+interface TimelineTabProps {
+  sessions: SessionEntry[];
+  styles: StoryStyles;
+  C: StoryColors;
+  toneColor: (tone?: string) => string;
+}
+
+function TimelineTab({ sessions, styles, C, toneColor }: TimelineTabProps) {
   if (!sessions?.length) return <EmptyState text="No sessions yet." />;
 
   return (
@@ -272,9 +299,9 @@ function TimelineTab({ sessions, styles, C, toneColor }: any) {
               )}
             </View>
             <Text style={styles.timelineSummary}>{sess.summary}</Text>
-            {sess.topics?.length > 0 && (
+            {!!sess.topics?.length && (
               <View style={styles.topicsRow}>
-                {sess.topics.map((t: string, j: number) => (
+                {sess.topics?.map((t: string, j: number) => (
                   <View key={j} style={styles.topicChip}><Text style={styles.topicChipText}>{t}</Text></View>
                 ))}
               </View>
@@ -288,7 +315,13 @@ function TimelineTab({ sessions, styles, C, toneColor }: any) {
 
 // ── Letter tab ──────────────────────────────────────────────────────────────
 
-function LetterTab({ letter, styles, C }: any) {
+interface LetterTabProps {
+  letter: LetterResponse | null;
+  styles: StoryStyles;
+  C: StoryColors;
+}
+
+function LetterTab({ letter, styles, C }: LetterTabProps) {
   if (!letter) return <EmptyState text="No letter yet." />;
 
   if (letter.locked) {

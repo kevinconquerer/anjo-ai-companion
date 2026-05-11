@@ -6,16 +6,32 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { api } from '../../lib/api';
-import { clearAuth } from '../../lib/storage';
+import { clearAuth, getLanguage, saveLanguage, LangPreference } from '../../lib/storage';
 import { useAuth } from '../../lib/auth-context';
 import { useTheme } from '../../lib/theme-context';
 
-type Section = 'username' | 'email' | 'password' | 'delete' | null;
+type Section = 'username' | 'email' | 'password' | 'language' | 'delete' | null;
+
+const LANGUAGES: LangPreference[] = [
+  { code: 'en', label: 'English',             native: 'English'   },
+  { code: 'zh', label: 'Traditional Chinese',  native: '繁體中文' },
+  { code: 'zh', label: 'Simplified Chinese',   native: '简体中文' },
+  { code: 'ja', label: 'Japanese',             native: '日本語'   },
+  { code: 'ko', label: 'Korean',               native: '한국어'   },
+  { code: 'es', label: 'Spanish',              native: 'Español'  },
+  { code: 'fr', label: 'French',               native: 'Français' },
+  { code: 'pt', label: 'Portuguese',           native: 'Português'},
+  { code: 'de', label: 'German',               native: 'Deutsch'  },
+  { code: 'it', label: 'Italian',              native: 'Italiano' },
+  { code: 'ar', label: 'Arabic',               native: 'العربية'  },
+  { code: 'hi', label: 'Hindi',                native: 'हिन्दी'  },
+];
 
 export default function Settings() {
   const router = useRouter();
   const { setAuthed } = useAuth();
   const [username, setUsername] = useState('');
+  const [lang, setLang] = useState<LangPreference | null>(null);
   const [open, setOpen] = useState<Section>(null);
 
   const [newUsername, setNewUsername] = useState('');
@@ -32,7 +48,7 @@ export default function Settings() {
 
   const C = useMemo(() => ({
     bg, surface, surface2, border, accent: primary, text, muted, danger,
-  }), [bg, surface, surface2, border, primary, danger]);
+  }), [bg, surface, surface2, border, primary, text, muted, danger]);
 
   const styles = useMemo(() => StyleSheet.create({
     scroll: { flex: 1, backgroundColor: C.bg },
@@ -55,13 +71,29 @@ export default function Settings() {
     btnDisabled: { opacity: 0.4 },
     btnText: { fontSize: 15, fontWeight: '600', color: C.bg },
     warning: { fontSize: 13, color: C.muted, lineHeight: 19 },
+    langRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, marginBottom: 6, backgroundColor: C.surface },
+    langRowActive: { backgroundColor: C.surface2, borderWidth: 1, borderColor: C.accent + '55' },
+    langNative: { fontSize: 16, color: C.text, fontWeight: '500', flex: 1 },
+    langNativeActive: { color: C.accent },
+    langLabel: { fontSize: 12, color: C.muted, marginRight: 6 },
+    langLabelActive: { color: C.accent + '99' },
+    dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.accent },
     spacer: { height: 20 },
   }), [C]);
 
-  useEffect(() => { api.account.info().then((info) => setUsername(info.username)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.account.info().then((info) => setUsername(info.username)).catch(() => {});
+    getLanguage().then((l) => { if (l) setLang(l); }).catch(() => {});
+  }, []);
 
   function toggle(section: Section) {
     setOpen((prev) => (prev === section ? null : section));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  async function pickLanguage(l: LangPreference) {
+    await saveLanguage(l);
+    setLang(l);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
@@ -74,7 +106,7 @@ export default function Settings() {
       setNewUsername(''); setUnPassword(''); setOpen(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Done', 'Username updated.');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: unknown) { Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong'); }
     setLoading(false);
   }
 
@@ -86,7 +118,7 @@ export default function Settings() {
       setNewEmail(''); setEmailPassword(''); setOpen(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Done', 'Email updated.');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: unknown) { Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong'); }
     setLoading(false);
   }
 
@@ -99,7 +131,7 @@ export default function Settings() {
       setCurrentPw(''); setNewPw(''); setConfirmPw(''); setOpen(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Done', 'Password changed.');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: unknown) { Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong'); }
     setLoading(false);
   }
 
@@ -110,7 +142,11 @@ export default function Settings() {
       await api.account.delete(deletePw);
       await clearAuth();
       setAuthed(false);
-    } catch (e: any) { Alert.alert('Error', e.message); setLoading(false); }
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function signOut() {
@@ -151,6 +187,34 @@ export default function Settings() {
             <TextInput style={styles.input} placeholder="New password" placeholderTextColor={C.muted} value={newPw} onChangeText={setNewPw} secureTextEntry />
             <TextInput style={styles.input} placeholder="Confirm new password" placeholderTextColor={C.muted} value={confirmPw} onChangeText={setConfirmPw} secureTextEntry />
             <TouchableOpacity style={[styles.btn, loading && styles.btnDisabled]} onPress={submitPassword} disabled={loading}><Text style={styles.btnText}>Change password</Text></TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={styles.sectionLabel}>PREFERENCES</Text>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Language</Text>
+          <TouchableOpacity onPress={() => toggle('language')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {lang && <Text style={{ fontSize: 14, color: C.muted }}>{lang.native}</Text>}
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+        {open === 'language' && (
+          <View style={[styles.form, { gap: 0 }]}>
+            {LANGUAGES.map((l) => {
+              const active = lang?.label === l.label;
+              return (
+                <TouchableOpacity
+                  key={`${l.code}-${l.label}`}
+                  style={[styles.langRow, active && styles.langRowActive]}
+                  onPress={() => pickLanguage(l)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.langNative, active && styles.langNativeActive]}>{l.native}</Text>
+                  <Text style={[styles.langLabel, active && styles.langLabelActive]}>{l.label}</Text>
+                  {active && <View style={styles.dot} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 

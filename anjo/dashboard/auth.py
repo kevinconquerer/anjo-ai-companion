@@ -1,5 +1,4 @@
 """Multi-user auth: bcrypt passwords, per-user signed cookies."""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +17,19 @@ from anjo.core.crypto import decrypt_db, encrypt_db, hmac_index
 from anjo.core.db import get_db
 from anjo.core.logger import logger
 
-_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+
+_USERNAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+
+def validate_username(username: str) -> str | None:
+    """Return an error message if the username is invalid, or None if it passes."""
+    if len(username) < 2 or len(username) > 32:
+        return "Username must be 2–32 characters."
+    if not _USERNAME_RE.match(username):
+        return "Username may only contain letters, numbers, _ or -."
+    return None
 
 
 def validate_password_strength(password: str) -> str | None:
@@ -34,7 +45,6 @@ def validate_password_strength(password: str) -> str | None:
         return "Password must contain at least one number or symbol."
     return None
 
-
 # ── Token revocation ──────────────────────────────────────────────────────────
 # Stores (signature_segment, exp_timestamp) tuples for revoked tokens.
 # In-memory — acceptable for single-process deployment with short-lived tokens.
@@ -44,16 +54,15 @@ _revoked_tokens: set[tuple[str, int]] = set()
 def load_revoked_tokens_from_db() -> None:
     """Load unexpired revoked tokens from DB into the in-memory set on startup."""
     import time
-
     now = int(time.time())
     try:
-        rows = (
-            get_db().execute("SELECT sig, exp FROM revoked_tokens WHERE exp > ?", (now,)).fetchall()
-        )
+        rows = get_db().execute(
+            "SELECT sig, exp FROM revoked_tokens WHERE exp > ?", (now,)
+        ).fetchall()
         for row in rows:
             _revoked_tokens.add((row["sig"], row["exp"]))
     except Exception:
-        pass
+        logger.exception("Failed to load revoked tokens from DB; in-memory revocation set may be stale")
 
 
 def revoke_token(token: str) -> None:
@@ -80,19 +89,17 @@ def revoke_token(token: str) -> None:
 def _cleanup_revoked() -> None:
     """Prune expired entries from the revocation set."""
     import time
-
     now = int(time.time())
     expired = {entry for entry in _revoked_tokens if entry[1] <= now}
     _revoked_tokens.difference_update(expired)
-
 
 # Pre-hashed dummy password for constant-time login checks.
 # Without this, a missing user returns instantly while a found user takes ~200ms
 # (bcrypt), leaking which emails are registered via timing.
 _DUMMY_HASH = _bcrypt.hashpw(b"dummy_constant_time", _bcrypt.gensalt())
 
-COOKIE_NAME = "anjo_auth"
-_DATA_ROOT = Path(__file__).parent.parent.parent / "data"
+COOKIE_NAME  = "anjo_auth"
+_DATA_ROOT   = Path(__file__).parent.parent.parent / "data"
 
 
 _DEV_SECRET: str | None = None
@@ -102,12 +109,13 @@ def _get_secret() -> str:
     secret = os.environ.get("ANJO_SECRET", "")
     if not secret:
         if os.environ.get("ANJO_ENV") != "dev":
-            raise RuntimeError("CRITICAL: ANJO_SECRET is not set. Refusing to start in production.")
+            raise RuntimeError(
+                "CRITICAL: ANJO_SECRET is not set. Refusing to start in production."
+            )
         global _DEV_SECRET
         if _DEV_SECRET is None:
             import secrets as _secrets
             import warnings
-
             _DEV_SECRET = _secrets.token_hex(32)
             warnings.warn(
                 "ANJO_SECRET is not set — generated a random secret for this process. "
@@ -119,7 +127,6 @@ def _get_secret() -> str:
 
 
 # ── User registry ─────────────────────────────────────────────────────────────
-
 
 def has_any_users() -> bool:
     row = get_db().execute("SELECT 1 FROM users LIMIT 1").fetchone()
@@ -134,9 +141,9 @@ def register_user(username: str, password: str, email: str) -> tuple[dict | None
 
     # Hash password before touching the db — bcrypt is intentionally slow
     hashed = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
-    user_id = str(uuid.uuid4())
+    user_id            = str(uuid.uuid4())
     verification_token = str(uuid.uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at         = datetime.now(timezone.utc).isoformat()
 
     db = get_db()
     try:
@@ -146,13 +153,10 @@ def register_user(username: str, password: str, email: str) -> tuple[dict | None
             "verification_token, verification_token_hmac, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                user_id,
-                username,
-                encrypt_db(email),
-                hmac_index(email),
+                user_id, username,
+                encrypt_db(email), hmac_index(email),
                 hashed,
-                encrypt_db(verification_token),
-                hmac_index(verification_token),
+                encrypt_db(verification_token), hmac_index(verification_token),
                 created_at,
             ),
         )
@@ -162,12 +166,12 @@ def register_user(username: str, password: str, email: str) -> tuple[dict | None
         return None, "username" if row else "email"
 
     return {
-        "user_id": user_id,
-        "username": username,
-        "email": email,
-        "email_verified": False,
+        "user_id":            user_id,
+        "username":           username,
+        "email":              email,
+        "email_verified":     False,
         "verification_token": verification_token,
-        "created_at": created_at,
+        "created_at":         created_at,
     }, ""
 
 
@@ -203,13 +207,9 @@ def force_verify_email(username: str) -> None:
 
 
 def is_email_verified(user_id: str) -> bool:
-    row = (
-        get_db()
-        .execute(
-            "SELECT email_verified, verification_token FROM users WHERE user_id = ?", (user_id,)
-        )
-        .fetchone()
-    )
+    row = get_db().execute(
+        "SELECT email_verified, verification_token FROM users WHERE user_id = ?", (user_id,)
+    ).fetchone()
     if not row:
         return True
     # Legacy users created before email enforcement have an empty verification_token — treat as verified.
@@ -219,7 +219,7 @@ def is_email_verified(user_id: str) -> bool:
 def authenticate_user(username_or_email: str, password: str) -> str | None:
     """Verify credentials. Returns user_id on success, None on failure.
     Supports case-insensitive username (COLLATE NOCASE) or email login."""
-    db = get_db()
+    db  = get_db()
     inp = username_or_email.strip()
     row = db.execute(
         "SELECT user_id, hashed_password FROM users WHERE username = ? OR email_hmac = ?",
@@ -238,11 +238,9 @@ def authenticate_user(username_or_email: str, password: str) -> str | None:
 
 
 def verify_password(user_id: str, password: str) -> bool:
-    row = (
-        get_db()
-        .execute("SELECT hashed_password FROM users WHERE user_id = ?", (user_id,))
-        .fetchone()
-    )
+    row = get_db().execute(
+        "SELECT hashed_password FROM users WHERE user_id = ?", (user_id,)
+    ).fetchone()
     if not row:
         return False
     try:
@@ -254,22 +252,20 @@ def verify_password(user_id: str, password: str) -> bool:
 def delete_account(user_id: str) -> None:
     """Remove user from db and wipe all their data files."""
     import shutil
-
     db = get_db()
-    for table in ("messages", "facts", "letter_cache", "active_sessions", "memory_graph", "users"):
+    for table in ("daily_usage", "facts", "letter_cache", "credits", "subscriptions", "users"):
         db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))  # noqa: S608
     db.commit()
     user_dir = _DATA_ROOT / "users" / user_id
     if user_dir.exists():
         shutil.rmtree(user_dir)
-    # Wipe ChromaDB vectors (per-user collections)
+    # Wipe ChromaDB vectors (global collection, filtered by user_id)
     try:
         from anjo.memory.long_term import _get_collections
-
         semantic_col, emotional_col = _get_collections(user_id)
         for col in (semantic_col, emotional_col):
             try:
-                ids = col.get(include=[])["ids"]
+                ids = col.get(where={"user_id": user_id}, include=[])["ids"]
                 if ids:
                     col.delete(ids=ids)
             except Exception as e:
@@ -281,15 +277,14 @@ def delete_account(user_id: str) -> None:
 def generate_reset_token(email: str) -> tuple[str, str] | None:
     """Find user by email, generate a 1-hour reset token. Returns (username, token) or None."""
     from datetime import timedelta
-
-    db = get_db()
+    db  = get_db()
     row = db.execute(
         "SELECT user_id, username FROM users WHERE email_hmac = ?",
         (hmac_index(email.strip()),),
     ).fetchone()
     if not row:
         return None
-    token = str(uuid.uuid4())
+    token  = str(uuid.uuid4())
     expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     db.execute(
         "UPDATE users SET reset_token = ?, reset_token_hmac = ?, reset_expiry = ? WHERE user_id = ?",
@@ -301,14 +296,10 @@ def generate_reset_token(email: str) -> tuple[str, str] | None:
 
 def validate_reset_token(token: str) -> str | None:
     """Return username if token is valid and not expired, else None."""
-    row = (
-        get_db()
-        .execute(
-            "SELECT username, reset_expiry FROM users WHERE reset_token_hmac = ?",
-            (hmac_index(token),),
-        )
-        .fetchone()
-    )
+    row = get_db().execute(
+        "SELECT username, reset_expiry FROM users WHERE reset_token_hmac = ?",
+        (hmac_index(token),),
+    ).fetchone()
     if not row:
         return None
     try:
@@ -364,21 +355,17 @@ def consume_reset_token(token: str, new_password: str) -> bool:
 
 def get_user_info(user_id: str) -> dict | None:
     """Return public profile fields for a user_id."""
-    row = (
-        get_db()
-        .execute(
-            "SELECT username, email, email_verified, created_at FROM users WHERE user_id = ?",
-            (user_id,),
-        )
-        .fetchone()
-    )
+    row = get_db().execute(
+        "SELECT username, email, email_verified, created_at FROM users WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
     if not row:
         return None
     return {
-        "username": row["username"],
-        "email": decrypt_db(row["email"]),
+        "username":       row["username"],
+        "email":          decrypt_db(row["email"]),
         "email_verified": bool(row["email_verified"]),
-        "created_at": row["created_at"],
+        "created_at":     row["created_at"],
     }
 
 
@@ -396,10 +383,8 @@ def update_email(user_id: str, new_email: str) -> tuple[bool | str, str | None]:
             "UPDATE users SET email = ?, email_hmac = ?, email_verified = 0, "
             "verification_token = ?, verification_token_hmac = ? WHERE user_id = ?",
             (
-                encrypt_db(new_email),
-                hmac_index(new_email),
-                encrypt_db(new_token),
-                hmac_index(new_token) if new_token else "",
+                encrypt_db(new_email), hmac_index(new_email),
+                encrypt_db(new_token), hmac_index(new_token) if new_token else "",
                 user_id,
             ),
         )
@@ -415,7 +400,9 @@ def update_username(user_id: str, new_username: str) -> bool:
     """Rename a user. Returns True on success, False if name already taken."""
     db = get_db()
     try:
-        db.execute("UPDATE users SET username = ? WHERE user_id = ?", (new_username, user_id))
+        db.execute(
+            "UPDATE users SET username = ? WHERE user_id = ?", (new_username, user_id)
+        )
         db.commit()
         row = db.execute("SELECT changes()").fetchone()
         return row[0] > 0 if row is not None else False
@@ -438,14 +425,13 @@ def change_password(user_id: str, new_password: str) -> bool:
 
 def list_users() -> list[dict]:
     """Return all users as a list of dicts (for admin use)."""
-    rows = (
-        get_db()
-        .execute(
-            "SELECT user_id, username, email, email_verified, created_at FROM users ORDER BY created_at DESC"
-        )
-        .fetchall()
-    )
-    return [{**dict(r), "email": decrypt_db(r["email"])} for r in rows]
+    rows = get_db().execute(
+        "SELECT user_id, username, email, email_verified, created_at FROM users ORDER BY created_at DESC"
+    ).fetchall()
+    return [
+        {**dict(r), "email": decrypt_db(r["email"])}
+        for r in rows
+    ]
 
 
 # ── Cookie tokens ─────────────────────────────────────────────────────────────
@@ -457,7 +443,6 @@ _TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60
 def make_token(user_id: str) -> str:
     """Create a signed token with expiration (iat + exp)."""
     import time
-
     secret = _get_secret()
     now = int(time.time())
     exp = now + _TOKEN_EXPIRY_SECONDS
@@ -471,7 +456,6 @@ def make_token(user_id: str) -> str:
 def verify_token(token: str) -> str | None:
     """Validate token, return user_id or None. Checks expiration."""
     import time
-
     try:
         parts = token.split(".")
     except (ValueError, AttributeError):
@@ -510,11 +494,9 @@ def verify_token(token: str) -> str | None:
 
     # Check user still exists and password_changed_at
     try:
-        row = (
-            get_db()
-            .execute("SELECT password_changed_at FROM users WHERE user_id = ?", (user_id,))
-            .fetchone()
-        )
+        row = get_db().execute(
+            "SELECT password_changed_at FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
         if row is None:
             # Account deleted — token is no longer valid
             return None
@@ -534,21 +516,9 @@ def valid_token(token: str) -> bool:
 
 def should_skip_auth(path: str) -> bool:
     return (
-        path
-        in {
-            "/",
-            "/login",
-            "/logout",
-            "/register",
-            "/verify",
-            "/forgot",
-            "/reset",
-            "/privacy",
-            "/terms",
-            "/sw.js",
-            "/api/auth/login",
-            "/api/auth/register",
-        }
+        path in {"/", "/login", "/logout", "/register", "/verify", "/forgot", "/reset",
+                 "/privacy", "/terms", "/refund", "/sw.js",
+                 "/api/auth/login", "/api/auth/register", "/api/billing/webhook"}
         or path.startswith("/static")
         or path == "/admin"
         or path.startswith("/api/admin")
@@ -563,7 +533,6 @@ def _token_from_request(request: Request) -> str:
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
-
 
 def get_current_user_id(request: Request) -> str:
     user_id = verify_token(_token_from_request(request))

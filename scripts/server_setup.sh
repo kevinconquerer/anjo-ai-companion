@@ -3,7 +3,7 @@
 set -e
 
 APP_DIR="$HOME/anjo"
-DOMAIN="${DOMAIN:-your-domain.com}"  # Set DOMAIN env var or pass via bootstrap workflow
+DOMAIN="anjo.love"
 
 echo "==> Installing system packages"
 sudo apt-get update -q
@@ -38,6 +38,7 @@ ANJO_ADMIN_SECRET=${ANJO_ADMIN_SECRET}
 RESEND_API_KEY=${RESEND_API_KEY}
 ANJO_BASE_URL=https://${DOMAIN}
 ANJO_ENV=production
+PADDLE_SANDBOX=false
 EOF
   echo ".env created"
 else

@@ -65,8 +65,8 @@
   <ul>
     <li><strong>Account data</strong> — username, email address, hashed password. We never store your plain-text password.</li>
     <li><strong>Conversation data</strong> — the messages you send and receive. These are stored on our servers and used to display your chat history, build memory, and generate personality embeddings.</li>
-    <li><strong>Usage data</strong> — message counts used for rate limiting.</li>
-
+    <li><strong>Usage data</strong> — daily message counts and subscription status, used to enforce tier limits.</li>
+    <li><strong>Billing data</strong> — payment is processed by FastSpring. We store only your FastSpring account ID and subscription status. We never see or store your card details. FastSpring's privacy policy governs their handling of payment data.</li>
     <li><strong>Device data</strong> — IP address, browser type, and device identifiers for security and fraud prevention.</li>
   </ul>
 
@@ -83,7 +83,7 @@
   <ul>
     <li>To generate responses through our AI provider (Anthropic). Your messages are sent to Anthropic's API to produce replies. Anthropic's privacy policy governs their handling of API data.</li>
     <li>To build persistent memory — summaries and embeddings of your conversations are stored locally and retrieved to give Anjo context in future sessions.</li>
-    <li>To maintain your account.</li>
+    <li>To maintain your account and subscription.</li>
     <li>To send transactional emails (email verification, password reset). We use Resend for email delivery.</li>
   </ul>
 
@@ -94,7 +94,7 @@
   <ul>
     <li><strong>Forget me</strong> — from inside the app, you can ask Anjo to erase your conversation history and memory at any time. This is negotiated with Anjo and processed immediately.</li>
     <li><strong>Delete account</strong> — you can permanently delete your account and all associated data from the app settings. This is irreversible.</li>
-    <li><strong>Data export</strong> — to request a copy of your data, email us at <a href="mailto:support@your-domain.com">support@your-domain.com</a>.</li>
+    <li><strong>Data export</strong> — to request a copy of your data, email us at <a href="mailto:kevin@anjo.love">kevin@anjo.love</a>.</li>
   </ul>
 
   <h2>Your rights (GDPR & CCPA)</h2>
@@ -108,7 +108,7 @@
     <li><strong>Right to restrict processing</strong> — request limitation on how we process your data</li>
     <li><strong>CCPA (California)</strong> — request disclosure of categories of data collected, request deletion, and opt-out of "sale" of personal data</li>
   </ul>
-  <p>To exercise any of these rights, email <a href="mailto:support@your-domain.com">support@your-domain.com</a>. We will respond within 30 days.</p>
+  <p>To exercise any of these rights, email <a href="mailto:kevin@anjo.love">kevin@anjo.love</a>. We will respond within 30 days.</p>
 
   <h2>Cookies</h2>
   <p>We use a single authentication cookie (<code>anjo_auth</code>) to keep you signed in. This is a strictly necessary cookie for the service to function. We do not use tracking cookies, advertising cookies, or analytics cookies.</p>
@@ -119,6 +119,7 @@
     <li><strong>Active accounts</strong> — your data is retained as long as your account is active</li>
     <li><strong>Deleted accounts</strong> — all personal data is permanently deleted within 30 days of account deletion</li>
     <li><strong>Conversation history</strong> — stored until you delete it or request "forget me"</li>
+    <li><strong>Financial records</strong> — retained for minimum 7 years for tax and legal compliance</li>
   </ul>
 
   <h2>Data security</h2>
@@ -128,18 +129,19 @@
   <p>Anjo uses the following third-party services to operate:</p>
   <ul>
     <li><strong>Anthropic</strong> — AI language model for generating responses. Your messages are sent to Anthropic's API for processing. <a href="https://www.anthropic.com/privacy" target="_blank">Anthropic Privacy Policy</a></li>
+    <li><strong>FastSpring</strong> — payment processing. <a href="https://fastspring.com/privacy/" target="_blank">FastSpring Privacy Policy</a></li>
     <li><strong>Resend</strong> — email delivery for transactional emails. <a href="https://resend.com/privacy" target="_blank">Resend Privacy Policy</a></li>
     <li><strong>AWS</strong> — hosting and infrastructure. Data is stored in US-based data centers.</li>
   </ul>
 
   <h2>Adult audience</h2>
-  <p>Anjo is intended for adults (18+) only. We do not knowingly collect data from minors. If you believe a minor has created an account, contact us at <a href="mailto:support@your-domain.com">support@your-domain.com</a>.</p>
+  <p>Anjo is intended for adults (18+) only. We do not knowingly collect data from minors. If you believe a minor has created an account, contact us at <a href="mailto:kevin@anjo.love">kevin@anjo.love</a>.</p>
 
   <h2>Changes to this policy</h2>
   <p>We may update this policy. Material changes will be communicated by email if you have one on file. Continued use of Anjo after changes constitutes acceptance.</p>
 
   <h2>Contact</h2>
-  <p>Questions? Email us at <a href="mailto:support@your-domain.com">support@your-domain.com</a>.</p>
+  <p>Questions? Email us at <a href="mailto:kevin@anjo.love">kevin@anjo.love</a>.</p>
 </div>
 
 <footer>© 2026 Anjo · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/refund">Refunds</a></footer>

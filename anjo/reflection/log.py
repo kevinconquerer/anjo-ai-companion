@@ -1,5 +1,4 @@
 """Reflection log — per-user append-only JSONL record of every reflection run."""
-
 from __future__ import annotations
 
 import json

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, ViewStyle } from 'react-native';
 import Reanimated, {
+  SharedValue,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -34,6 +35,57 @@ const BLOB_SHADOW_COLORS = [
 
 const BLOB_OPACITIES = [0.55, 0.50, 0.46, 0.42];
 
+// Color stops per blob — indexed to match BLOB_CONFIGS order
+const BLOB_COLOR_STOPS = [
+  ['#4A6FA5', '#2EC4B6', '#E86F5C'],
+  ['#7B6B9E', '#5AC8BE', '#F7D26A'],
+  ['#2C3E6B', '#45B7A0', '#FF6F91'],
+  ['#3D1A5C', '#C060C0', '#FFB0E8'],
+] as const;
+
+interface BlobLayerProps {
+  clock: SharedValue<number>;
+  colorAnim: SharedValue<number>;
+  colorStops: readonly [string, string, string];
+  lut: { tx: readonly number[]; ty: readonly number[] };
+  spread: number;
+  diameter: number;
+  offset: number;
+  opacity: number;
+  shadowStyle: ViewStyle;
+}
+
+// Extracted into its own component so useAnimatedStyle is called at the
+// top level of a component — not inside a .map() callback (Rules of Hooks).
+function BlobLayer({ clock, colorAnim, colorStops, lut, spread, diameter, offset, opacity, shadowStyle }: BlobLayerProps) {
+  const blobStyle = useAnimatedStyle(() => {
+    const tx = interpolate(clock.value, CLOCK_INPUT_RANGE, lut.tx as number[], Extrapolation.CLAMP) * spread;
+    const ty = interpolate(clock.value, CLOCK_INPUT_RANGE, lut.ty as number[], Extrapolation.CLAMP) * spread;
+    return {
+      backgroundColor: interpolateColor(colorAnim.value, [0, 0.5, 1], [...colorStops]),
+      transform: [{ translateX: tx }, { translateY: ty }],
+    };
+  });
+
+  return (
+    <Reanimated.View
+      style={[
+        {
+          position: 'absolute',
+          left: offset,
+          top: offset,
+          width: diameter,
+          height: diameter,
+          borderRadius: diameter / 2,
+          opacity,
+        },
+        shadowStyle,
+        blobStyle,
+      ]}
+    />
+  );
+}
+
 export function AnimatedOrb({
   size = 38,
   trust   = 0.5,
@@ -45,25 +97,28 @@ export function AnimatedOrb({
   const pulseFactor = useSharedValue(1);
   const clock = useSharedValue(0);
 
-  const trustAnim = useSharedValue(trust);
+  const trustAnim   = useSharedValue(trust);
   const valenceAnim = useSharedValue(valence * 0.5 + 0.5);
   const arousalAnim = useSharedValue(arousal * 0.5 + 0.5);
   const longingAnim = useSharedValue(longing);
+
+  // Maps blob index → its color shared value (stable refs, safe to array-index)
+  const colorAnims = [trustAnim, valenceAnim, arousalAnim, longingAnim];
 
   useEffect(() => {
     if (awaiting) {
       pulseFactor.value = withRepeat(
         withSequence(
           withTiming(1.12, { duration: 900, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1.0, { duration: 900, easing: Easing.inOut(Easing.ease) })
+          withTiming(1.0,  { duration: 900, easing: Easing.inOut(Easing.ease) })
         ),
-        -1, // infinite loop
-        true // reverse
+        -1,
+        true
       );
     } else {
       pulseFactor.value = withTiming(1.0, { duration: 300 });
     }
-  }, [awaiting]);
+  }, [awaiting]); // pulseFactor is a stable shared-value ref — intentionally excluded
 
   useEffect(() => {
     clock.value = withRepeat(
@@ -74,17 +129,18 @@ export function AnimatedOrb({
       -1,
       false
     );
-  }, []);
+  }, []); // clock is a stable shared-value ref — runs once on mount
 
-  useEffect(() => { trustAnim.value = withTiming(trust, { duration: 1800 }); }, [trust]);
+  // Reanimated shared values are stable refs, intentionally excluded from deps
+  useEffect(() => { trustAnim.value   = withTiming(trust,               { duration: 1800 }); }, [trust]);
   useEffect(() => { valenceAnim.value = withTiming(valence * 0.5 + 0.5, { duration: 1800 }); }, [valence]);
   useEffect(() => { arousalAnim.value = withTiming(arousal * 0.5 + 0.5, { duration: 1800 }); }, [arousal]);
-  useEffect(() => { longingAnim.value = withTiming(longing, { duration: 1800 }); }, [longing]);
+  useEffect(() => { longingAnim.value = withTiming(longing,              { duration: 1800 }); }, [longing]);
 
   const spread = (size / 2) * 0.30;
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseFactor.value }]
+    transform: [{ scale: pulseFactor.value }],
   }));
 
   return (
@@ -93,53 +149,24 @@ export function AnimatedOrb({
         {BLOB_CONFIGS.map((cfg, i) => {
           const blobDiameter = size * cfg.sizeFactor;
           const offset = (size - blobDiameter) / 2;
-          const lut = LUTS[i];
-          
-          const iosShadow = Platform.OS === 'ios' ? {
-            shadowColor: BLOB_SHADOW_COLORS[i],
-            shadowOffset: { width: 0, height: 0 },
+          const iosShadow: ViewStyle = Platform.OS === 'ios' ? {
+            shadowColor:   BLOB_SHADOW_COLORS[i],
+            shadowOffset:  { width: 0, height: 0 },
             shadowOpacity: 0.65,
-            shadowRadius: size * 0.28,
+            shadowRadius:  size * 0.28,
           } : {};
-
-          // Reanimated style calculation for each blob (runs natively at 60fps)
-          const blobStyle = useAnimatedStyle(() => {
-            const tx = interpolate(clock.value, CLOCK_INPUT_RANGE, lut.tx, Extrapolation.CLAMP) * spread;
-            const ty = interpolate(clock.value, CLOCK_INPUT_RANGE, lut.ty, Extrapolation.CLAMP) * spread;
-
-            let bgColor;
-            if (i === 0) {
-              bgColor = interpolateColor(trustAnim.value, [0, 0.5, 1], ['#4A6FA5', '#2EC4B6', '#E86F5C']);
-            } else if (i === 1) {
-              bgColor = interpolateColor(valenceAnim.value, [0, 0.5, 1], ['#7B6B9E', '#5AC8BE', '#F7D26A']);
-            } else if (i === 2) {
-              bgColor = interpolateColor(arousalAnim.value, [0, 0.5, 1], ['#2C3E6B', '#45B7A0', '#FF6F91']);
-            } else {
-              bgColor = interpolateColor(longingAnim.value, [0, 0.5, 1], ['#3D1A5C', '#C060C0', '#FFB0E8']);
-            }
-
-            return {
-              backgroundColor: bgColor,
-              transform: [{ translateX: tx }, { translateY: ty }],
-            };
-          });
-
           return (
-            <Reanimated.View
+            <BlobLayer
               key={i}
-              style={[
-                {
-                  position: 'absolute',
-                  left: offset,
-                  top: offset,
-                  width: blobDiameter,
-                  height: blobDiameter,
-                  borderRadius: blobDiameter / 2,
-                  opacity: BLOB_OPACITIES[i],
-                },
-                iosShadow as any,
-                blobStyle,
-              ]}
+              clock={clock}
+              colorAnim={colorAnims[i]}
+              colorStops={BLOB_COLOR_STOPS[i]}
+              lut={LUTS[i]}
+              spread={spread}
+              diameter={blobDiameter}
+              offset={offset}
+              opacity={BLOB_OPACITIES[i]}
+              shadowStyle={iosShadow}
             />
           );
         })}

@@ -1,9 +1,10 @@
 """Pre-launch regression sweep — guards every bug/fix area identified in the sweep."""
-
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,57 +18,70 @@ import pytest
 # SEC-5 / BUG-3  admin_reset_user scopes to user_id
 # ---------------------------------------------------------------------------
 
-
 class TestAdminResetUserScope:
     """admin_reset_user must delete only the target user's ChromaDB vectors,
     not any other user's."""
 
     def _register_and_get_uid(self, client, username: str, email: str) -> str:
-        client.post(
-            "/register", data={"username": username, "password": "pass1234", "email": email}
-        )
-        users = client.get("/api/admin/users", headers={"X-Admin-Key": "test_admin_key"}).json()[
-            "users"
-        ]
+        client.post("/register", data={
+            "username": username, "password": "pass1234", "email": email
+        })
+        users = client.get(
+            "/api/admin/users", headers={"X-Admin-Key": "test_admin_key"}
+        ).json()["users"]
         return next(u["user_id"] for u in users if u["username"] == username)
 
     def test_reset_user_A_does_not_delete_user_B_vectors(self, client, tmp_path):
-        """After resetting user_A, _get_collections must be called with user_A's id only,
-        never user_B's (per-user collections enforce scope at the collection level)."""
+        """After resetting user_A, a mock of ChromaDB's delete must only be called
+        with user_A's filter, never user_B's."""
         uid_a = self._register_and_get_uid(client, "reset_user_a", "reset_a@test.com")
         uid_b = self._register_and_get_uid(client, "reset_user_b", "reset_b@test.com")
 
-        called_with_ids = []
+        deleted_where_filters = []
 
-        def fake_get_collections(user_id):
-            called_with_ids.append(user_id)
-            col = MagicMock()
-            col.get.return_value = {"ids": [f"{user_id}_vec1"]}
-            col.name = f"sem_{user_id}"
-            return col, col
+        def fake_get(where, include):
+            return {"ids": [f"{where['user_id']}_vec1"]}
 
-        with patch("anjo.memory.long_term._get_collections", side_effect=fake_get_collections):
+        def fake_delete(ids):
+            # record which user_id was targeted via the ids that were returned
+            deleted_where_filters.extend(ids)
+
+        mock_col = MagicMock()
+        mock_col.get.side_effect = fake_get
+        mock_col.delete.side_effect = fake_delete
+        mock_col.name = "test_collection"
+
+        with patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)):
             r = client.post(
                 f"/api/admin/users/{uid_a}/reset",
                 headers={"X-Admin-Key": "test_admin_key"},
             )
 
         assert r.status_code == 200
-        # _get_collections must only have been invoked with uid_a
-        assert uid_b not in called_with_ids, (
-            f"user_B's id passed to _get_collections: {called_with_ids}"
+        # The only vector IDs deleted should belong to uid_a, not uid_b
+        for deleted_id in deleted_where_filters:
+            assert uid_b not in deleted_id, (
+                f"user_B's vector id found in delete call: {deleted_id}"
+            )
+        assert any(uid_a in deleted_id for deleted_id in deleted_where_filters), (
+            "user_A's vectors were never deleted"
         )
-        assert uid_a in called_with_ids, "user_A's id was never passed to _get_collections"
 
     def test_reset_user_A_does_delete_user_A_vectors(self, client):
-        """After resetting user_A, ChromaDB delete IS called on user_A's collection."""
+        """After resetting user_A, ChromaDB delete IS called with user_A's filter."""
         uid_a = self._register_and_get_uid(client, "reset_only_a", "only_a@test.com")
 
         delete_called_with = []
 
+        def fake_get(where, include):
+            return {"ids": [f"vec_{where['user_id']}_1"]}
+
+        def fake_delete(ids):
+            delete_called_with.extend(ids)
+
         mock_col = MagicMock()
-        mock_col.get.return_value = {"ids": [f"vec_{uid_a}_1"]}
-        mock_col.delete.side_effect = lambda ids: delete_called_with.extend(ids)
+        mock_col.get.side_effect = fake_get
+        mock_col.delete.side_effect = fake_delete
         mock_col.name = "semantic"
 
         with patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)):
@@ -86,7 +100,6 @@ class TestAdminResetUserScope:
 # SEC-11  Dev secret is random, not hardcoded
 # ---------------------------------------------------------------------------
 
-
 class TestDevSecretRandomness:
     """When ANJO_SECRET is absent in dev mode, a random secret is generated.
     Two independent processes would produce different secrets."""
@@ -97,12 +110,10 @@ class TestDevSecretRandomness:
         monkeypatch.setenv("ANJO_ENV", "dev")
 
         import anjo.dashboard.auth as _auth
-
         # Reset module-level state so we get a fresh generation
         _auth._DEV_SECRET = None
 
         import warnings
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             secret = _auth._get_secret()
@@ -119,11 +130,9 @@ class TestDevSecretRandomness:
         monkeypatch.setenv("ANJO_ENV", "dev")
 
         import anjo.dashboard.auth as _auth
-
         _auth._DEV_SECRET = None
 
         import warnings
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             s1 = _auth._get_secret()
@@ -138,7 +147,6 @@ class TestDevSecretRandomness:
 
         # verify_token checks DB — insert stub user so it doesn't reject as deleted
         from anjo.core.db import get_db
-
         db = get_db()
         db.execute(
             "INSERT OR IGNORE INTO users (user_id, username, email, email_hmac, hashed_password, created_at) "
@@ -148,11 +156,9 @@ class TestDevSecretRandomness:
         db.commit()
 
         import anjo.dashboard.auth as _auth
-
         _auth._DEV_SECRET = None
 
         import warnings
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             token = _auth.make_token("test-user-123")
@@ -166,9 +172,8 @@ class TestDevSecretRandomness:
         monkeypatch.delenv("ANJO_SECRET", raising=False)
         monkeypatch.setenv("ANJO_ENV", "dev")
 
-        import warnings
-
         import anjo.dashboard.auth as _auth
+        import warnings
 
         _auth._DEV_SECRET = None
         with warnings.catch_warnings():
@@ -186,7 +191,6 @@ class TestDevSecretRandomness:
 # ---------------------------------------------------------------------------
 # SEC-3  Admin key timing-safe comparison
 # ---------------------------------------------------------------------------
-
 
 class TestAdminKeyComparison:
     """The admin key check must use hmac.compare_digest (timing-safe)."""
@@ -225,14 +229,12 @@ class TestAdminKeyComparison:
 # MEM-1 / DEBT-17  Session ID uniqueness
 # ---------------------------------------------------------------------------
 
-
 class TestSessionIdUniqueness:
     """Two sessions created for the same user must have different session_ids.
     The session_id must not be the user_id itself."""
 
     def _create_fresh_session(self, user_id: str) -> dict:
         import anjo.dashboard.session_store as _ss
-
         with _ss._sessions_lock:
             _ss._sessions.pop(user_id, None)
         _ss.get_or_create_session(user_id)
@@ -241,7 +243,6 @@ class TestSessionIdUniqueness:
     def test_two_sessions_same_user_different_session_ids(self, monkeypatch):
         """Simulate two consecutive sessions — IDs must be distinct."""
         import anjo.dashboard.session_store as _ss
-
         user_id = "session_id_test_user"
 
         # Session 1
@@ -257,12 +258,14 @@ class TestSessionIdUniqueness:
 
     def test_session_id_is_not_user_id(self, monkeypatch):
         """session_id must not equal user_id."""
+        import anjo.dashboard.session_store as _ss
         user_id = "session_id_test_user_2"
         session = self._create_fresh_session(user_id)
         assert session["session_id"] != user_id
 
     def test_session_id_is_nonempty_string(self, monkeypatch):
         """session_id must be a non-empty string."""
+        import anjo.dashboard.session_store as _ss
         user_id = "session_id_test_user_3"
         session = self._create_fresh_session(user_id)
         assert isinstance(session["session_id"], str)
@@ -272,7 +275,6 @@ class TestSessionIdUniqueness:
 # ---------------------------------------------------------------------------
 # MEM-3 / BUG-9  SelfCore.user_id preserved through model_validate
 # ---------------------------------------------------------------------------
-
 
 class TestSelfCoreUserIdRestored:
     """build_system_prompt (via /api/system-prompt) must pass the real user_id,
@@ -284,7 +286,6 @@ class TestSelfCoreUserIdRestored:
         calls = []
 
         import anjo.core.facts as _facts
-
         original_load = _facts.load_facts
 
         def capturing_load_facts(user_id: str):
@@ -297,13 +298,14 @@ class TestSelfCoreUserIdRestored:
         assert r.status_code == 200
         # load_facts is called inside session_store._load_user_facts at session creation;
         # it should never be called with 'default'
-        assert "default" not in calls, f"load_facts was called with 'default'. All calls: {calls}"
+        assert "default" not in calls, (
+            f"load_facts was called with 'default'. All calls: {calls}"
+        )
 
     def test_self_core_user_id_restored_after_model_validate(self):
         """After model_validate, user_id is preserved as a regular field.
         This test verifies the new field pattern works correctly."""
         from anjo.core.self_core import SelfCore
-
         original = SelfCore.load("alice_test_user")
         # Verify user_id is set correctly after load
         assert original.user_id == "alice_test_user"
@@ -318,13 +320,11 @@ class TestSelfCoreUserIdRestored:
 # MEM-4  relationship_ceiling reset on forget
 # ---------------------------------------------------------------------------
 
-
 class TestForgettingResetsCeiling:
     """After negotiate_and_forget(), the ceiling state must be cleared."""
 
     def _make_core_with_ceiling(self, user_id: str, stage: str = "friend", ceiling: str = "friend"):
         from anjo.core.self_core import SelfCore
-
         core = SelfCore.load(user_id)
         core.relationship.stage = stage
         core.relationship.session_count = 10
@@ -340,31 +340,23 @@ class TestForgettingResetsCeiling:
 
         # Mock LLM + ChromaDB + history so no real I/O happens
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}'
-            )
-        ]
+        mock_response.content = [MagicMock(text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}')]
 
         mock_col = MagicMock()
         mock_col.get.return_value = {"ids": []}
 
-        with (
-            patch("anjo.core.forgetting.get_client") as mock_client,
-            patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)),
-            patch("anjo.core.history.clear"),
-            patch("anjo.reflection.log._log_path") as mock_log_path,
-        ):
+        with patch("anjo.core.forgetting.get_client") as mock_client, \
+             patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)), \
+             patch("anjo.core.history.clear"), \
+             patch("anjo.reflection.log._log_path") as mock_log_path:
             mock_log_path.return_value = MagicMock()
             mock_log_path.return_value.unlink = MagicMock()
             mock_client.return_value.messages.create.return_value = mock_response
 
             from anjo.core.forgetting import negotiate_and_forget
-
             negotiate_and_forget(user_id)
 
         from anjo.core.self_core import SelfCore
-
         refreshed = SelfCore.load(user_id)
         assert refreshed.relationship_ceiling is None, (
             f"Expected relationship_ceiling to be None after forget, got: {refreshed.relationship_ceiling}"
@@ -376,31 +368,23 @@ class TestForgettingResetsCeiling:
         self._make_core_with_ceiling(user_id, stage="friend", ceiling="friend")
 
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}'
-            )
-        ]
+        mock_response.content = [MagicMock(text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}')]
 
         mock_col = MagicMock()
         mock_col.get.return_value = {"ids": []}
 
-        with (
-            patch("anjo.core.forgetting.get_client") as mock_client,
-            patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)),
-            patch("anjo.core.history.clear"),
-            patch("anjo.reflection.log._log_path") as mock_log_path,
-        ):
+        with patch("anjo.core.forgetting.get_client") as mock_client, \
+             patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)), \
+             patch("anjo.core.history.clear"), \
+             patch("anjo.reflection.log._log_path") as mock_log_path:
             mock_log_path.return_value = MagicMock()
             mock_log_path.return_value.unlink = MagicMock()
             mock_client.return_value.messages.create.return_value = mock_response
 
             from anjo.core.forgetting import negotiate_and_forget
-
             negotiate_and_forget(user_id)
 
         from anjo.core.self_core import SelfCore
-
         refreshed = SelfCore.load(user_id)
         assert refreshed.relationship.stage == "stranger"
 
@@ -410,31 +394,23 @@ class TestForgettingResetsCeiling:
         self._make_core_with_ceiling(user_id)
 
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}'
-            )
-        ]
+        mock_response.content = [MagicMock(text='{"response": "Goodbye.", "clear_residue": true, "soften_opinion": true, "attachment_delta": -0.3}')]
 
         mock_col = MagicMock()
         mock_col.get.return_value = {"ids": []}
 
-        with (
-            patch("anjo.core.forgetting.get_client") as mock_client,
-            patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)),
-            patch("anjo.core.history.clear"),
-            patch("anjo.reflection.log._log_path") as mock_log_path,
-        ):
+        with patch("anjo.core.forgetting.get_client") as mock_client, \
+             patch("anjo.memory.long_term._get_collections", return_value=(mock_col, mock_col)), \
+             patch("anjo.core.history.clear"), \
+             patch("anjo.reflection.log._log_path") as mock_log_path:
             mock_log_path.return_value = MagicMock()
             mock_log_path.return_value.unlink = MagicMock()
             mock_client.return_value.messages.create.return_value = mock_response
 
             from anjo.core.forgetting import negotiate_and_forget
-
             negotiate_and_forget(user_id)
 
         from anjo.core.self_core import SelfCore
-
         refreshed = SelfCore.load(user_id)
         assert refreshed.ceiling_last_checked == 0
 
@@ -443,13 +419,11 @@ class TestForgettingResetsCeiling:
 # STAGE-1  Ceiling check 5-session gate
 # ---------------------------------------------------------------------------
 
-
 class TestCeilingCheckGate:
     """_maybe_advance_past_ceiling must only fire when enough sessions have passed."""
 
     def _make_core(self, session_count: int, ceiling_last_checked: int, ceiling: str = "friend"):
         from anjo.core.self_core import SelfCore
-
         core = SelfCore()
         core.relationship.stage = ceiling
         core.relationship.session_count = session_count
@@ -459,10 +433,7 @@ class TestCeilingCheckGate:
 
     def test_not_called_when_too_few_sessions_have_passed(self):
         """With only 3 sessions since last check (need 5), _maybe_advance must short-circuit."""
-        from anjo.reflection.engine import (
-            _maybe_advance_past_ceiling,
-        )
-
+        from anjo.reflection.engine import _maybe_advance_past_ceiling, MIN_SESSIONS_BETWEEN_CEILING_CHECKS
         core = self._make_core(session_count=13, ceiling_last_checked=10)  # 3 apart < 5
 
         llm_call_count = []
@@ -483,9 +454,7 @@ class TestCeilingCheckGate:
         core = self._make_core(session_count=10, ceiling_last_checked=5)
 
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text='{"advance": false, "reason": "respecting their wish"}')
-        ]
+        mock_response.content = [MagicMock(text='{"advance": false, "reason": "respecting their wish"}')]
 
         with patch("anjo.reflection.engine.get_client") as mock_client:
             mock_client.return_value.messages.create.return_value = mock_response
@@ -496,9 +465,8 @@ class TestCeilingCheckGate:
 
     def test_never_fires_when_ceiling_is_none(self):
         """No ceiling set → function must return immediately without any LLM call."""
-        from anjo.core.self_core import SelfCore
         from anjo.reflection.engine import _maybe_advance_past_ceiling
-
+        from anjo.core.self_core import SelfCore
         core = SelfCore()
         core.relationship_ceiling = None
 
@@ -509,7 +477,6 @@ class TestCeilingCheckGate:
     def test_first_check_fires_when_ceiling_last_checked_is_zero(self):
         """When ceiling_last_checked==0 (never checked before), the gate does not block it."""
         from anjo.reflection.engine import _maybe_advance_past_ceiling
-
         core = self._make_core(session_count=6, ceiling_last_checked=0)
 
         mock_response = MagicMock()
@@ -531,7 +498,6 @@ class TestCeilingCheckGate:
 # ASYNC-1 / BUG-20  get_or_create_session concurrency
 # ---------------------------------------------------------------------------
 
-
 class TestGetOrCreateSessionConcurrency:
     """Two concurrent calls to get_or_create_session for the same new user_id
     must result in exactly ONE session, not two."""
@@ -539,7 +505,6 @@ class TestGetOrCreateSessionConcurrency:
     def test_concurrent_calls_produce_one_session(self):
         """Use a threading.Barrier to maximise the race window."""
         import anjo.dashboard.session_store as _ss
-
         user_id = "concurrent_session_test_user"
 
         with _ss._sessions_lock:
@@ -572,7 +537,6 @@ class TestGetOrCreateSessionConcurrency:
     def test_first_message_injected_exactly_once(self):
         """The first assistant message (opener) must appear exactly once in history."""
         import anjo.dashboard.session_store as _ss
-
         user_id = "first_msg_once_test_user"
 
         with _ss._sessions_lock:
@@ -608,7 +572,6 @@ class TestGetOrCreateSessionConcurrency:
 # ---------------------------------------------------------------------------
 # EDGE-5 / EDGE-16  Empty/whitespace message rejected
 # ---------------------------------------------------------------------------
-
 
 class TestEmptyMessageRejection:
     """The chat endpoint must reject empty and invisible-character-only messages."""
@@ -679,7 +642,6 @@ class TestEmptyMessageRejection:
 # BUG-11  _QUICK_FACTS_DONE pruned on session end
 # ---------------------------------------------------------------------------
 
-
 class TestQuickFactsDonePruned:
     """After end_session, (user_id, session_id) must be removed from _QUICK_FACTS_DONE."""
 
@@ -694,7 +656,6 @@ class TestQuickFactsDonePruned:
         # Manually inject a key as if quick-facts extraction had run
         # We need the user_id — extract it from the auth cookie
         import anjo.dashboard.auth as _auth
-
         cookie_val = auth_client.cookies.get("anjo_auth", "")
         user_id = _auth.verify_token(cookie_val)
         assert user_id is not None
@@ -706,11 +667,9 @@ class TestQuickFactsDonePruned:
         assert key in _QUICK_FACTS_DONE
 
         # End session — this should remove the key
-        with (
-            patch("anjo.reflection.engine.run_reflection"),
-            patch("anjo.core.transcript_queue.save_pending", return_value="/tmp/fake.json"),
-            patch("anjo.core.transcript_queue.delete_pending"),
-        ):
+        with patch("anjo.reflection.engine.run_reflection"), \
+             patch("anjo.core.transcript_queue.save_pending", return_value="/tmp/fake.json"), \
+             patch("anjo.core.transcript_queue.delete_pending"):
             auth_client.post(f"/api/chat/{session_id}/end")
 
         assert key not in _QUICK_FACTS_DONE, (
@@ -726,7 +685,6 @@ class TestQuickFactsDonePruned:
 # DEBT-6 / BUG-14  Anthropic client singleton
 # ---------------------------------------------------------------------------
 
-
 class TestAnthropicClientSingleton:
     """get_client() must return the same object on repeated calls (singleton pattern)."""
 
@@ -734,7 +692,6 @@ class TestAnthropicClientSingleton:
         """is identity check — must be the exact same Python object."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test_key_for_singleton")
         import anjo.core.llm as _llm
-
         # Reset singleton state
         _llm._client = None
 
@@ -746,7 +703,6 @@ class TestAnthropicClientSingleton:
         """Call get_client() 5 times — must be the same object every time."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test_key_for_singleton")
         import anjo.core.llm as _llm
-
         _llm._client = None
 
         first = _llm.get_client()
@@ -757,7 +713,6 @@ class TestAnthropicClientSingleton:
         """Without ANTHROPIC_API_KEY, get_client must raise RuntimeError cleanly."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         import anjo.core.llm as _llm
-
         orig_use_bedrock = _llm.USE_BEDROCK
         orig_bearer = _llm._BEARER_TOKEN
         _llm._client = None
@@ -778,7 +733,6 @@ class TestAnthropicClientSingleton:
 # TOKEN-1 / CACHE-1  build_system_prompt facts parameter
 # ---------------------------------------------------------------------------
 
-
 class TestBuildSystemPromptFacts:
     """Three-Tier architecture: build_system_prompt no longer injects facts directly.
     Facts now live in JOURNAL.md (consolidated post-reflection by journal.py).
@@ -787,7 +741,6 @@ class TestBuildSystemPromptFacts:
 
     def _make_core(self, user_id: str = "facts_test_user"):
         from anjo.core.self_core import SelfCore
-
         core = SelfCore.load(user_id)
         core.user_id = user_id
         return core
@@ -795,7 +748,6 @@ class TestBuildSystemPromptFacts:
     def test_user_facts_passed_load_facts_not_called(self):
         """Facts are never loaded directly — journal handles them post-reflection."""
         from anjo.core.prompt_builder import build_system_prompt
-
         core = self._make_core()
 
         with patch("anjo.core.facts.load_facts") as mock_load:
@@ -806,7 +758,6 @@ class TestBuildSystemPromptFacts:
         """Even with user_facts=None, load_facts is not called by prompt_builder.
         Facts are consolidated into the journal during reflection, not per-turn."""
         from anjo.core.prompt_builder import build_system_prompt
-
         core = self._make_core()
 
         with patch("anjo.core.facts.load_facts") as mock_load:
@@ -816,7 +767,6 @@ class TestBuildSystemPromptFacts:
     def test_empty_list_user_facts_does_not_call_load_facts(self):
         """An explicitly passed empty list has no effect — no fallback call."""
         from anjo.core.prompt_builder import build_system_prompt
-
         core = self._make_core()
 
         with patch("anjo.core.facts.load_facts") as mock_load:
@@ -827,7 +777,6 @@ class TestBuildSystemPromptFacts:
 # ---------------------------------------------------------------------------
 # TOKEN-10 regression guard  reflection summary variable
 # ---------------------------------------------------------------------------
-
 
 class TestReflectionSummaryVariable:
     """run_reflection must not raise NameError when 'summary' is present or absent
@@ -847,42 +796,23 @@ class TestReflectionSummaryVariable:
         return mock_resp
 
     def _pass1(self) -> MagicMock:
-        return self._make_llm_resp(
-            {
-                "user_name": None,
-                "user_facts": [],
-                "memorable_moments": [],
-                "topics": ["general"],
-                "user_stated_ceiling": None,
-                "memory_nodes": [],
-            }
-        )
+        return self._make_llm_resp({
+            "user_name": None, "user_facts": [], "memorable_moments": [],
+            "topics": ["general"], "user_stated_ceiling": None, "memory_nodes": [],
+        })
 
     def _pass2(self) -> MagicMock:
-        return self._make_llm_resp(
-            {
-                "emotional_tone": "warm",
-                "emotional_valence": 0.5,
-                "user_input_valence": 0.7,
-                "triggers": [],
-                "new_residue": [],
-                "attachment_update": None,
-                "opinion_update": None,
-                "preoccupation": None,
-            }
-        )
+        return self._make_llm_resp({
+            "emotional_tone": "warm", "emotional_valence": 0.5, "user_input_valence": 0.7,
+            "triggers": [], "new_residue": [], "attachment_update": None,
+            "opinion_update": None, "preoccupation": None,
+        })
 
     def _pass3(self, summary: str = "A test session summary.") -> MagicMock:
-        return self._make_llm_resp(
-            {
-                "significance": 0.3,
-                "note": None,
-                "desires_add": [],
-                "desires_remove": [],
-                "memory_relevance": 0.0,
-                "summary": summary,
-            }
-        )
+        return self._make_llm_resp({
+            "significance": 0.3, "note": None, "desires_add": [],
+            "desires_remove": [], "memory_relevance": 0.0, "summary": summary,
+        })
 
     def test_summary_present_passes_to_store_memory(self):
         """When Pass 3 returns a summary, store_memory must be called with it."""
@@ -895,18 +825,11 @@ class TestReflectionSummaryVariable:
 
         store_calls = []
 
-        with (
-            patch("anjo.reflection.engine.get_client") as mock_client,
-            patch(
-                "anjo.reflection.engine.store_memory",
-                side_effect=lambda **kw: store_calls.append(kw),
-            ),
-            patch("anjo.reflection.log.append_log"),
-        ):
+        with patch("anjo.reflection.engine.get_client") as mock_client, \
+             patch("anjo.reflection.engine.store_memory", side_effect=lambda **kw: store_calls.append(kw)), \
+             patch("anjo.reflection.log.append_log"):
             mock_client.return_value.messages.create.side_effect = [
-                self._pass1(),
-                self._pass2(),
-                self._pass3(summary="We talked about life."),
+                self._pass1(), self._pass2(), self._pass3(summary="We talked about life."),
             ]
             run_reflection(
                 transcript=self._minimal_transcript(),
@@ -928,15 +851,11 @@ class TestReflectionSummaryVariable:
         core = SelfCore.load(user_id)
         core.user_id = user_id
 
-        with (
-            patch("anjo.reflection.engine.get_client") as mock_client,
-            patch("anjo.reflection.engine.store_memory"),
-            patch("anjo.reflection.log.append_log"),
-        ):
+        with patch("anjo.reflection.engine.get_client") as mock_client, \
+             patch("anjo.reflection.engine.store_memory"), \
+             patch("anjo.reflection.log.append_log"):
             mock_client.return_value.messages.create.side_effect = [
-                self._pass1(),
-                self._pass2(),
-                self._pass3(summary=""),
+                self._pass1(), self._pass2(), self._pass3(summary=""),
             ]
             run_reflection(
                 transcript=self._minimal_transcript(),
@@ -957,18 +876,11 @@ class TestReflectionSummaryVariable:
 
         store_calls = []
 
-        with (
-            patch("anjo.reflection.engine.get_client") as mock_client,
-            patch(
-                "anjo.reflection.engine.store_memory",
-                side_effect=lambda **kw: store_calls.append(kw),
-            ),
-            patch("anjo.reflection.log.append_log"),
-        ):
+        with patch("anjo.reflection.engine.get_client") as mock_client, \
+             patch("anjo.reflection.engine.store_memory", side_effect=lambda **kw: store_calls.append(kw)), \
+             patch("anjo.reflection.log.append_log"):
             mock_client.return_value.messages.create.side_effect = [
-                self._pass1(),
-                self._pass2(),
-                self._pass3(summary=""),
+                self._pass1(), self._pass2(), self._pass3(summary=""),
             ]
             run_reflection(
                 transcript=self._minimal_transcript(),

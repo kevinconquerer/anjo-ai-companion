@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Anjo" />
   <link rel="apple-touch-icon" href="/static/icon-192.png" />
-
+  <!-- FastSpring loaded dynamically after billing config fetch -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -330,6 +330,7 @@
       display: flex;
       align-items: flex-end;
       gap: 10px;
+      position: relative;
       max-width: var(--max-width);
       margin: 0 auto;
     }
@@ -399,6 +400,187 @@
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+
+    #mic-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 17px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    #mic-btn:hover { border-color: rgba(255,255,255,0.4); }
+    #mic-btn.recording { background: rgba(220,50,50,0.3); border-color: #e05; animation: pulse-mic 1s infinite; }
+    @keyframes pulse-mic { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    /* ── Voice mode button in header ── */
+    #vm-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 50%;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 15px;
+      transition: border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    #vm-btn:hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+
+    /* ── Voice mode: chat transitions out ── */
+    header, .thread, .input-area {
+      transition: opacity 0.28s ease, transform 0.28s ease;
+    }
+    body.vm-active header,
+    body.vm-active .thread,
+    body.vm-active .input-area {
+      opacity: 0;
+      transform: translateY(14px);
+      pointer-events: none;
+    }
+
+    /* ── Voice mode panel ── */
+    #vm-panel {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 450;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(22px);
+      transition: opacity 0.32s ease, transform 0.32s ease;
+    }
+    #vm-panel.active {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateY(0);
+    }
+
+    #vm-exit {
+      position: absolute;
+      top: 22px; right: 22px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.25);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+    #vm-exit:hover { color: rgba(255,255,255,0.65); }
+
+    #vm-canvas {
+      display: block;
+      cursor: pointer;
+    }
+    #vm-canvas:active { opacity: 0.88; }
+
+    #vm-label {
+      margin-top: 28px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.28);
+      letter-spacing: 0.04em;
+      transition: color 0.35s ease;
+      user-select: none;
+      min-height: 20px;
+    }
+    body.vm-listening #vm-label { color: rgba(255,255,255,0.55); }
+    body.vm-speaking  #vm-label { color: rgba(240,185,90,0.65); }
+
+    #mic-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    #mic-modal-overlay.show { display: flex; }
+    #mic-modal {
+      background: #1a1917;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 32px 28px 24px;
+      width: 340px;
+      max-width: calc(100vw - 40px);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    #mic-modal .mic-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    #mic-modal h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    #mic-modal p {
+      margin: 0 0 24px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-muted);
+    }
+    #mic-modal .mic-modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+    #mic-modal .mic-modal-actions button {
+      flex: 1;
+      padding: 11px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    #mic-modal .mic-modal-actions button:hover { opacity: 0.85; }
+    #mic-modal .btn-allow {
+      background: var(--accent);
+      color: #0f0d0c;
+    }
+    #mic-modal .btn-cancel {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.15) !important;
+      color: var(--text-muted);
+    }
+
+    #voice-toggle {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      user-select: none;
+      padding: 3px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      align-self: flex-end;
+      background: transparent;
+    }
+    #voice-toggle:hover { color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.3); }
+    #voice-toggle.on { color: #fff; border-color: rgba(255,200,50,0.6); background: rgba(255,180,0,0.15); }
   </style>
 </head>
 
@@ -495,12 +677,23 @@
       <span class="header-name">Anjo</span>
       <div class="status-dot" id="status-dot"></div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+    <button id="vm-btn" onclick="enterVoiceMode()" title="Switch to voice conversation">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
     <div style="position:relative;">
       <button class="menu-btn" id="menu-btn" onclick="toggleMenu()" title="Menu">···</button>
       <div class="dropdown" id="dropdown">
         <a href="/story" class="dropdown-item">Our story</a>
-        <a href="mailto:support@your-domain.com?subject=Feedback" class="dropdown-item">Send feedback</a>
+        <a href="mailto:kevin@anjo.love?subject=Anjo%20feedback" class="dropdown-item">Send feedback</a>
         <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
+        <div id="billing-status" style="padding:6px 12px;font-size:12px;color:var(--text-muted);">—</div>
+        <a href="/billing" class="dropdown-item">Plans &amp; billing</a>
         <div style="border-top:1px solid var(--border);margin:4px 0;"></div>
         <button class="dropdown-item" onclick="openAccountModal()">My account</button>
         <button class="dropdown-item danger" onclick="openModal('forget')">Forget me</button>
@@ -508,12 +701,14 @@
         <a href="/logout" class="dropdown-item danger">Sign out</a>
       </div>
     </div>
+    </div><!-- end header-right flex -->
   </header>
 
   <div class="thread" id="thread"></div>
 
   <div class="input-area">
     <div class="input-row">
+      <button id="mic-btn" title="Click to record voice" onclick="toggleRecording()">🎤</button>
       <textarea id="input" placeholder="Say something…" rows="1"></textarea>
       <button class="send-btn" id="send-btn" onclick="send()">
         <svg viewBox="0 0 24 24">
@@ -521,12 +716,37 @@
           <polygon points="22 2 15 22 11 13 2 9 22 2" />
         </svg>
       </button>
+      <span id="voice-toggle" onclick="toggleVoiceMode()" title="Auto-play Anjo's voice">🔊</span>
+    </div>
+  </div>
+
+  <!-- Live voice mode panel -->
+  <div id="vm-panel" data-state="idle">
+    <button id="vm-exit" onclick="exitVoiceMode()" title="Back to chat">✕</button>
+    <canvas id="vm-canvas" width="300" height="300" onclick="vmTap()"></canvas>
+    <div id="vm-label">Tap to speak</div>
+  </div>
+
+  <div id="mic-modal-overlay">
+    <div id="mic-modal">
+      <span class="mic-icon">🎤</span>
+      <h3>Microphone access needed</h3>
+      <p>To use voice input, allow Anjo to access your microphone. Click <strong>Allow</strong> when your browser asks, or enable it in your browser's site settings.</p>
+      <div class="mic-modal-actions">
+        <button class="btn-cancel" onclick="dismissMicTip()">Cancel</button>
+        <button class="btn-allow" onclick="dismissMicTip(); toggleRecording()">Allow &amp; try again</button>
+      </div>
     </div>
   </div>
 
   <script>
     let sessionId = null;
     let isStreaming = false;
+    let voiceMode = false;
+    let _audioUnlocked = false;
+    let _currentAnjoText = '';
+    let _mediaRecorder = null;
+    let _audioChunks = [];
 
     // ── End session on tab close ─────────────────────────────────────────────
     // Use visibilitychange for reliable detection; fallback to pagehide
@@ -560,13 +780,14 @@
     }
 
     class Orb {
-      constructor(canvas) {
+      constructor(canvas, sz = ORB_PX) {
         this.canvas = canvas;
+        this.sz = sz;
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = ORB_PX * dpr;
-        canvas.height = ORB_PX * dpr;
-        canvas.style.width = ORB_PX + 'px';
-        canvas.style.height = ORB_PX + 'px';
+        canvas.width = sz * dpr;
+        canvas.height = sz * dpr;
+        canvas.style.width = sz + 'px';
+        canvas.style.height = sz + 'px';
         this.ctx = canvas.getContext('2d');
         this.ctx.scale(dpr, dpr);
         this.t = Math.random() * 100;
@@ -587,7 +808,7 @@
 
       _fill() {
         const { ctx } = this;
-        const r = ORB_PX / 2;
+        const r = this.sz / 2;
         ctx.beginPath();
         ctx.arc(r, r, r, 0, Math.PI * 2);
         ctx.fillStyle = '#100e0c';
@@ -602,8 +823,9 @@
         if (s.awaiting !== undefined) this.awaiting = s.awaiting;
       }
 
-      start() {
-        const tick = () => { this._draw(); this._raf = requestAnimationFrame(tick); };
+      start(onTick) {
+        this._onTick = onTick || null;
+        const tick = () => { if (this._onTick) this._onTick(); this._draw(); this._raf = requestAnimationFrame(tick); };
         tick();
       }
 
@@ -611,7 +833,7 @@
 
       _draw() {
         const { ctx } = this;
-        const sz = ORB_PX, cx = sz / 2, cy = sz / 2, r = sz / 2;
+        const sz = this.sz, cx = sz / 2, cy = sz / 2, r = sz / 2;
 
         // Speed: base + arousal contribution. Awaiting = slower, more breath-like
         const spd = this.awaiting
@@ -875,6 +1097,7 @@
     }
 
     function appendToAnjoBubble(row, chunk) {
+      _currentAnjoText += chunk;
       const bubble = row.querySelector('.bubble');
       const typing = bubble.querySelector('.typing');
       if (typing) typing.remove();
@@ -995,6 +1218,7 @@
       input.disabled = true;
       setStatus('loading');
 
+      _currentAnjoText = '';
       const anjoBubble = addAnjoBubble();
 
       try {
@@ -1038,6 +1262,11 @@
                   });
                 }
                 setStatus('online');
+                if (voiceMode && _currentAnjoText) speakText(_currentAnjoText);
+                finish();
+              } else if (currentEvent === 'no_credits') {
+                anjoBubble.remove();
+                showNoCredits(d.tier || 'free');
                 finish();
               } else if (currentEvent === 'error') {
                 const bubble = anjoBubble.querySelector('.bubble');
@@ -1064,7 +1293,269 @@
       document.getElementById('send-btn').disabled = false;
       const input = document.getElementById('input');
       input.disabled = false;
-      input.focus();
+      const inVoicePanel = document.getElementById('vm-panel')?.classList.contains('active');
+      if (!inVoicePanel) input.focus();
+    }
+
+    // ── Voice ─────────────────────────────────────────────────────────────────
+
+    function _unlockAudio() {
+      if (_audioUnlocked) return;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.close();
+      _audioUnlocked = true;
+    }
+
+    function toggleVoiceMode() {
+      voiceMode = !voiceMode;
+      if (voiceMode) _unlockAudio();
+      const el = document.getElementById('voice-toggle');
+      el.classList.toggle('on', voiceMode);
+      el.textContent = voiceMode ? '🔊 on' : '🔊';
+      el.title = voiceMode ? 'Voice on — click to turn off' : 'Auto-play Anjo\'s voice';
+    }
+
+    async function speakText(text) {
+      const inVoicePanel = document.getElementById('vm-panel')?.classList.contains('active');
+      if (inVoicePanel) setVmState('speaking');
+      try {
+        const res = await fetch('/api/voice/speak', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({text}),
+        });
+        if (!res.ok) { if (inVoicePanel) setVmState('idle'); return; }
+        const arrayBuf = await res.arrayBuffer();
+
+        // In voice panel: route through the existing AudioContext (already unlocked by mic tap)
+        // This bypasses browser autoplay policy which blocks new Audio() without user gesture
+        if (inVoicePanel && _vmAudioCtx) {
+          if (_vmAudioCtx.state === 'suspended') await _vmAudioCtx.resume();
+          const decoded = await _vmAudioCtx.decodeAudioData(arrayBuf.slice(0));
+          const src = _vmAudioCtx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(_vmAudioCtx.destination);
+          src.onended = () => setVmState('idle');
+          src.start();
+          return;
+        }
+
+        // Fallback: normal Audio element (chat mode or before mic was ever tapped)
+        const blob = new Blob([arrayBuf]);
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          if (inVoicePanel) setVmState('idle');
+        };
+        audio.play().catch(() => {
+          URL.revokeObjectURL(url);
+          voiceMode = false;
+          document.getElementById('voice-toggle').classList.remove('on');
+          document.getElementById('voice-toggle').textContent = '🔊';
+          if (inVoicePanel) setVmState('idle');
+        });
+      } catch (e) { console.error('TTS:', e); if (inVoicePanel) setVmState('idle'); }
+    }
+
+    async function toggleRecording() {
+      const btn = document.getElementById('mic-btn');
+      if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+        _mediaRecorder.stop();
+        return;
+      }
+      dismissMicTip();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        _audioChunks = [];
+        _mediaRecorder = new MediaRecorder(stream);
+        _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _audioChunks.push(e.data); };
+        _mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          btn.classList.remove('recording');
+          btn.textContent = '🎤';
+          await transcribeAndSend(new Blob(_audioChunks, {type: 'audio/webm'}));
+        };
+        _mediaRecorder.start();
+        btn.classList.add('recording');
+        btn.textContent = '⏹';
+      } catch (e) {
+        console.error('Mic:', e);
+        document.getElementById('mic-modal-overlay').classList.add('show');
+      }
+    }
+
+    function dismissMicTip() {
+      document.getElementById('mic-modal-overlay').classList.remove('show');
+    }
+
+    document.getElementById('mic-modal-overlay').addEventListener('click', function(e) {
+      if (e.target === this) dismissMicTip();
+    });
+
+    // ── Live voice mode ───────────────────────────────────────────────────────
+
+    let _vmState    = 'idle';
+    let _vmAudioCtx  = null;
+    let _vmMicAnalyser = null;
+    let _vmMicStream   = null;
+    let _vmOrb         = null;
+
+    function enterVoiceMode() {
+      voiceMode = true;
+      _unlockAudio();
+      document.getElementById('voice-toggle').classList.add('on');
+      document.getElementById('voice-toggle').textContent = '🔊 on';
+      document.getElementById('vm-panel').classList.add('active');
+      document.body.classList.add('vm-active');
+
+      // Build large orb on the voice canvas, seeded from the header orb's live state
+      const vmCanvas = document.getElementById('vm-canvas');
+      _vmOrb = new Orb(vmCanvas, 260);
+      if (_orb) {
+        _vmOrb.setState({
+          trust:   _orb.trust,
+          arousal: _orb.arousal,
+          valence: _orb.valence,
+          longing: _orb.longing,
+        });
+        _vmOrb.t = _orb.t; // start with same noise phase so it doesn't flash
+      }
+      _vmOrb.start(() => {
+        // Audio-reactive: boost arousal from mic amplitude when listening
+        if (_vmState === 'listening' && _vmMicAnalyser) {
+          const buf = new Uint8Array(_vmMicAnalyser.frequencyBinCount);
+          _vmMicAnalyser.getByteTimeDomainData(buf);
+          let sum = 0;
+          for (let i = 0; i < buf.length; i++) sum += (buf[i] - 128) ** 2;
+          const amp = Math.min(1, Math.sqrt(sum / buf.length) / 38);
+          _vmOrb.arousal = amp * 1.6 - 0.4;
+        }
+      });
+      setVmState('idle');
+    }
+
+    function exitVoiceMode() {
+      if (_mediaRecorder && _mediaRecorder.state === 'recording') _mediaRecorder.stop();
+      _vmStopMic();
+      if (_vmOrb) { _vmOrb.stop(); _vmOrb = null; }
+      document.getElementById('vm-panel').classList.remove('active');
+      document.body.classList.remove('vm-active', 'vm-listening', 'vm-speaking');
+    }
+
+    function setVmState(state) {
+      _vmState = state;
+      document.getElementById('vm-panel').dataset.state = state;
+      document.body.classList.remove('vm-listening', 'vm-speaking');
+      if (state === 'listening') document.body.classList.add('vm-listening');
+      if (state === 'speaking')  document.body.classList.add('vm-speaking');
+      const labels = { idle: 'Tap to speak', listening: 'Listening…', thinking: 'Anjo is thinking…', speaking: 'Anjo is speaking…' };
+      const el = document.getElementById('vm-label');
+      if (el) el.textContent = labels[state] || '';
+      // Sync orb personality to voice state
+      if (_vmOrb) {
+        const stateOrb = {
+          idle:      { awaiting: true,  arousal: -0.35 },
+          listening: { awaiting: false, arousal:  0.40 },
+          thinking:  { awaiting: true,  arousal: -0.20 },
+          speaking:  { awaiting: false, arousal:  0.25 },
+        };
+        _vmOrb.setState(stateOrb[state] || {});
+      }
+    }
+
+    // ── Mic / AudioContext helpers ────────────────────────────────────────────
+
+    async function _vmSetupMic(stream) {
+      if (!_vmAudioCtx) _vmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (_vmAudioCtx.state === 'suspended') await _vmAudioCtx.resume();
+      const src = _vmAudioCtx.createMediaStreamSource(stream);
+      _vmMicAnalyser = _vmAudioCtx.createAnalyser();
+      _vmMicAnalyser.fftSize = 512;
+      _vmMicAnalyser.smoothingTimeConstant = 0.6;
+      src.connect(_vmMicAnalyser);
+      _vmMicStream = stream;
+    }
+
+    function _vmStopMic() {
+      if (_vmMicStream) { _vmMicStream.getTracks().forEach(t => t.stop()); _vmMicStream = null; }
+      _vmMicAnalyser = null;
+    }
+
+    // ── Tap / record / send ───────────────────────────────────────────────────
+
+    async function vmTap() {
+      if (_vmState === 'idle') {
+        dismissMicTip();
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          await _vmSetupMic(stream);
+          _audioChunks = [];
+          _mediaRecorder = new MediaRecorder(stream);
+          _mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) _audioChunks.push(e.data); };
+          _mediaRecorder.onstop = async () => {
+            _vmStopMic();
+            setVmState('thinking');
+            await _vmTranscribeAndSend(new Blob(_audioChunks, { type: 'audio/webm' }));
+          };
+          _mediaRecorder.start();
+          setVmState('listening');
+        } catch (e) {
+          console.error('VM mic:', e);
+          document.getElementById('mic-modal-overlay').classList.add('show');
+        }
+      } else if (_vmState === 'listening') {
+        if (_mediaRecorder && _mediaRecorder.state === 'recording') _mediaRecorder.stop();
+      }
+    }
+
+    async function _vmTranscribeAndSend(blob) {
+      try {
+        const form = new FormData();
+        form.append('audio', blob, 'audio.webm');
+        const res = await fetch('/api/voice/transcribe', { method: 'POST', body: form, credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.text) {
+          const input = document.getElementById('input');
+          input.value = data.text;
+          input.dispatchEvent(new Event('input'));
+          send();
+        } else {
+          setVmState('idle');
+        }
+      } catch (e) {
+        console.error('VM STT:', e);
+        setVmState('idle');
+      }
+    }
+
+    async function transcribeAndSend(blob) {
+      const input = document.getElementById('input');
+      const prev = input.placeholder;
+      input.placeholder = 'Transcribing…';
+      try {
+        const form = new FormData();
+        form.append('audio', blob, 'audio.webm');
+        const res = await fetch('/api/voice/transcribe', {
+          method: 'POST', body: form, credentials: 'same-origin'
+        });
+        const data = await res.json();
+        if (data.text) {
+          input.value = data.text;
+          input.dispatchEvent(new Event('input'));
+          send();
+        }
+      } catch (e) {
+        console.error('STT:', e);
+      } finally {
+        input.placeholder = prev;
+      }
     }
 
     // ── Textarea auto-grow ────────────────────────────────────────────────────
@@ -1100,6 +1591,21 @@
       } catch (_) { }
     }
 
+    // ── Billing ───────────────────────────────────────────────────────────────
+
+    async function fetchBillingStatus() {
+      try {
+        const r = await fetch('/api/billing/status');
+        if (!r.ok) return;
+        const d = await r.json();
+        const statusEl = document.getElementById('billing-status');
+        if (!statusEl) return;
+        const tierLabel = { free: 'Free', pro: 'Pro', premium: 'Premium' }[d.tier] || d.tier;
+        const extra = d.message_credits > 0 ? ` · ${d.message_credits} credits` : '';
+        statusEl.textContent = `${tierLabel} — ${d.messages_remaining} left today${extra}`;
+      } catch (_) { }
+    }
+
     function showToast(msg, type = 'info') {
       const t = document.createElement('div');
       t.textContent = msg;
@@ -1111,6 +1617,21 @@
       document.body.appendChild(t);
       requestAnimationFrame(() => { t.style.opacity = '1'; });
       setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 4000);
+    }
+
+    function subscribe(tier) {
+      document.getElementById('dropdown').classList.remove('open');
+      showToast('Subscriptions are available on the Anjo mobile app.');
+    }
+
+    function buyCredits(pack) {
+      document.getElementById('dropdown').classList.remove('open');
+      showToast('Credit packs are available on the Anjo mobile app.');
+    }
+
+    function manageSubscription() {
+      document.getElementById('dropdown').classList.remove('open');
+      showToast('Manage your subscription in the Anjo mobile app.');
     }
 
     // ── Account modal ─────────────────────────────────────────────────────────
@@ -1320,10 +1841,49 @@
       }
     }
 
+    function showNoCredits(tier) {
+      const row = addAnjoBubble();
+      const bubble = row.querySelector('.bubble');
+      bubble.querySelector('.typing')?.remove();
+      const limits = { pro: 50, premium: 100, free: 20 };
+      const limit = limits[tier] || 20;
+      bubble.innerHTML = `You've used all ${limit} messages for today. <a href="/billing" style="color:var(--accent);font-weight:600;margin-left:4px;">View plans</a>`;
+      scrollDown();
+      fetchBillingStatus();
+    }
+
+    // Handle payment success redirect
+    const _params = new URLSearchParams(window.location.search);
+    if (_params.get('payment') === 'success') {
+      history.replaceState({}, '', '/');
+      const _tier = _params.get('tier') || 'pro';
+      const _tierLabel = { pro: 'Pro', premium: 'Premium' }[_tier] || 'Pro';
+      setTimeout(() => {
+        fetchBillingStatus();
+        const row = addAnjoBubble();
+        const bubble = row.querySelector('.bubble');
+        bubble.querySelector('.typing')?.remove();
+        bubble.textContent = `${_tierLabel} subscription active.`;
+        scrollDown();
+      }, 800);
+    } else if (_params.get('payment') === 'credits') {
+      history.replaceState({}, '', '/');
+      const _pack = parseInt(_params.get('pack') || '0');
+      setTimeout(() => {
+        fetchBillingStatus();
+        const row = addAnjoBubble();
+        const bubble = row.querySelector('.bubble');
+        bubble.querySelector('.typing')?.remove();
+        bubble.textContent = _pack ? `${_pack} message credits added.` : 'Credits added.';
+        scrollDown();
+      }, 800);
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
     (async () => {
       initOrb();
       fetchStage();
+      fetchBillingStatus();
       fetchCeiling();
       await startSession();
       await loadHistory();

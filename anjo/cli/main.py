@@ -1,8 +1,8 @@
 """Anjo CLI — the main conversation REPL."""
-
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import uuid
 from datetime import datetime
@@ -16,11 +16,7 @@ app = typer.Typer(add_completion=False)
 
 
 def _validate_env() -> None:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        import typer
-
-        typer.echo("Error: ANTHROPIC_API_KEY is not set. Add it to your .env file.", err=True)
-        raise typer.Exit(1)
+    pass  # Running locally via Ollama — no API key required
 
 
 @app.command()
@@ -46,7 +42,6 @@ def chat(
 
     # Process any transcripts that failed to reflect last session
     from anjo.core.transcript_queue import process_all_pending
-
     pending_count = process_all_pending()
     if pending_count:
         typer.echo(f"[Caught up on {pending_count} saved conversation(s).]")
@@ -87,7 +82,6 @@ def chat(
                 result = conversation_graph.invoke(state)
             except Exception as e:
                 import openai
-
                 if isinstance(e, openai.APIConnectionError):
                     typer.echo(f"\nAnjo: [connection issue — is Ollama running? {e}]")
                     continue
@@ -105,14 +99,12 @@ def chat(
             return
 
         # Save transcript immediately — no LLM, always succeeds
-        from anjo.core.transcript_queue import delete_pending, save_pending
-
+        from anjo.core.transcript_queue import save_pending, delete_pending
         pending_path = save_pending(transcript, effective_user_id, session_id)
         typer.echo("\n\n[Reflecting on this conversation...]")
 
         def _reflect() -> None:
             from anjo.reflection.engine import run_reflection
-
             try:
                 run_reflection(
                     transcript=transcript,

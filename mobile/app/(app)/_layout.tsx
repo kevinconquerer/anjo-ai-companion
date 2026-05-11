@@ -10,6 +10,7 @@ export default function AppLayout() {
         contentStyle: { backgroundColor: '#0a0a0a' },
       }}
     >
+      <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="forget" options={{ presentation: 'transparentModal', headerShown: false }} />
     </Stack>
   );

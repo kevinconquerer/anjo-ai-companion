@@ -5,6 +5,7 @@
 .env.development
 *.pem
 *.key
+mobile/.env.local
 
 # Data — contains user data and ChromaDB
 data/
@@ -26,21 +27,24 @@ mobile/dist/
 # macOS
 .DS_Store
 
+# Security testing artifacts — never commit
+deliverables/
+.playwright-cli/
+SECURITY_REPORT.md
+
 # Agent / IDE configs (local only)
 .claude/settings.local.json
 .continue/
 .agents/
 .aider*
 
-# Security testing artifacts (never commit)
-deliverables/
-.playwright-cli/
-SECURITY_REPORT.md
-
 # Internal / operational files
 tasks
 ORCHESTRATOR-PROMPT.md
 skills-lock.json
+workspace/
+outputs/
+Anjo_Architecture_Report.docx
 
 # Logs
 *.log

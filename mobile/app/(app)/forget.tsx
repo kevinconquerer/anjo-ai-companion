@@ -16,7 +16,7 @@ export default function Forget() {
   const { primary, surface, surface2, border, text, muted, background } = useTheme();
   const C = useMemo(() => ({
     surface, surface2, border, accent: primary, text, muted, background
-  }), [surface, surface2, border, primary]);
+  }), [surface, surface2, border, primary, text, muted, background]);
 
   const styles = useMemo(() => StyleSheet.create({
     sheet: {
@@ -48,8 +48,8 @@ export default function Forget() {
       await api.account.forget(pw);
       await clearAuth();
       setAuthed(false);
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong');
       setForgetLoading(false);
     }
   }

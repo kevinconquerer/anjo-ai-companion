@@ -76,8 +76,8 @@ export default function Login() {
       const { token, user_id } = await api.auth.login(username.trim(), password);
       await saveAuth(token, user_id);
       setAuthed(true);
-    } catch (e: any) {
-      Alert.alert('Sign in failed', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Sign in failed', e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }

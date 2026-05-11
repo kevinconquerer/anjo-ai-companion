@@ -5,7 +5,6 @@ longing builds during absence, inter_session_drift is updated continuously.
 
 Safe to call frequently — rate-limited to once per 20 hours per user.
 """
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -60,8 +59,8 @@ def apply_daily_drift(user_id: str) -> bool:
     # ── Mood: drift toward baseline_valence, not toward zero ─────────────────
     # Each day pulls 5% closer to her resting state. After ~2 weeks she's
     # halfway back; a hostile session doesn't define her forever.
-    core.mood.valence = round(core.mood.valence * 0.95 + core.baseline_valence * 0.05, 4)
-    core.mood.arousal = round(core.mood.arousal * 0.92, 4)
+    core.mood.valence   = round(core.mood.valence   * 0.95 + core.baseline_valence * 0.05, 4)
+    core.mood.arousal   = round(core.mood.arousal   * 0.92, 4)
     core.mood.dominance = round(core.mood.dominance * 0.97, 4)
 
     # ── Longing: builds during first 7 days of absence, then fades ───────────
@@ -89,7 +88,6 @@ def apply_daily_drift(user_id: str) -> bool:
     # maybe_generate_outreach will call core.save() again only if it writes a message.
     try:
         from anjo.core.outreach import maybe_generate_outreach
-
         # Reload core so outreach sees the freshly-saved state
         core = SelfCore.load(user_id)
         maybe_generate_outreach(user_id, core, days_since)
@@ -103,7 +101,6 @@ def run_drift_for_all_users() -> None:
     """Run drift for every known user. Called by the background scheduler."""
     try:
         from anjo.core.db import get_db
-
         rows = get_db().execute("SELECT user_id FROM users").fetchall()
         user_ids = [row["user_id"] for row in rows]
     except Exception as e:
@@ -131,7 +128,6 @@ def run_autodream_for_all_users() -> None:
     """
     try:
         from anjo.core.db import get_db
-
         rows = get_db().execute("SELECT user_id FROM users").fetchall()
         user_ids = [row["user_id"] for row in rows]
     except Exception as e:
@@ -139,7 +135,6 @@ def run_autodream_for_all_users() -> None:
         return
 
     from anjo.dashboard.session_store import get_session
-
     now = datetime.now(timezone.utc)
 
     for user_id in user_ids:
@@ -148,7 +143,6 @@ def run_autodream_for_all_users() -> None:
             continue
         try:
             from anjo.core.self_core import SelfCore
-
             core = SelfCore.load(user_id)
 
             # Skip if AutoDream ran recently
@@ -165,7 +159,6 @@ def run_autodream_for_all_users() -> None:
                 continue
 
             from anjo.memory.journal import run_autodream
-
             if run_autodream(user_id):
                 # Record the run timestamp on SelfCore
                 core = SelfCore.load(user_id)
