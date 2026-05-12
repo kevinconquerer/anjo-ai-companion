@@ -1,4 +1,5 @@
 """Memory API routes — reads ChromaDB collections and reflection log."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -11,6 +12,7 @@ router = APIRouter()
 @router.get("/reflection-log")
 def get_reflection_log(user_id: str = Depends(get_current_user_id)):
     from anjo.reflection.log import read_log
+
     return {"entries": read_log(user_id, limit=50)}
 
 

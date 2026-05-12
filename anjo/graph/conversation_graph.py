@@ -9,6 +9,7 @@ Two compiled graphs built from a shared base:
 - ``conversation_graph`` — used by the CLI (``anjo chat``) and tests.
   Extends the base with respond_node (blocking, non-streaming, no billing).
 """
+
 from __future__ import annotations
 
 from langgraph.graph import StateGraph, END
@@ -38,11 +39,15 @@ def _build_base_graph() -> StateGraph:
 
     graph.set_entry_point("perceive")
     graph.add_edge("perceive", "gate")
-    graph.add_conditional_edges("gate", _route_after_gate, {
-        "end": END,
-        "retrieve": "retrieve",
-        "appraise": "appraise",
-    })
+    graph.add_conditional_edges(
+        "gate",
+        _route_after_gate,
+        {
+            "end": END,
+            "retrieve": "retrieve",
+            "appraise": "appraise",
+        },
+    )
     graph.add_edge("retrieve", "appraise")
     graph.add_edge("appraise", "policy")
 

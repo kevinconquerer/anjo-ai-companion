@@ -1,4 +1,5 @@
 """Self-Core and System Prompt API routes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,7 @@ router = APIRouter()
 def get_self_core(user_id: str = Depends(get_current_user_id)):
     from anjo.dashboard.session_store import get_self_core_safe
     from anjo.core.self_core import SelfCore
+
     core_dict = get_self_core_safe(user_id)
     if core_dict:
         return core_dict
@@ -24,6 +26,7 @@ def get_system_prompt(user_id: str = Depends(get_current_user_id)):
     from anjo.dashboard.session_store import get_self_core_safe
     from anjo.core.self_core import SelfCore
     from anjo.core.prompt_builder import build_system_prompt
+
     core_dict = get_self_core_safe(user_id)
     if core_dict:
         core = SelfCore.model_validate(core_dict)
@@ -37,6 +40,7 @@ def get_system_prompt(user_id: str = Depends(get_current_user_id)):
 @router.get("/session/emotions")
 def get_session_emotions(user_id: str = Depends(get_current_user_id)):
     from anjo.dashboard.session_store import get_session_snapshot
+
     snapshot = get_session_snapshot(user_id)
     emotions = snapshot["state"].get("active_emotions", {}) if snapshot else {}
     return {"active_emotions": emotions}
@@ -44,8 +48,10 @@ def get_session_emotions(user_id: str = Depends(get_current_user_id)):
 
 _VALID_CEILINGS = {"acquaintance", "friend", "close", "intimate", "none"}
 
+
 class CeilingRequest(BaseModel):
     ceiling: str  # "acquaintance" | "friend" | "close" | "intimate" | "none"
+
 
 @router.post("/preferences/ceiling")
 def set_relationship_ceiling(body: CeilingRequest, user_id: str = Depends(get_current_user_id)):
@@ -53,6 +59,7 @@ def set_relationship_ceiling(body: CeilingRequest, user_id: str = Depends(get_cu
         raise HTTPException(400, f"Invalid ceiling. Must be one of: {_VALID_CEILINGS}")
     from anjo.core.self_core import SelfCore
     from anjo.dashboard.session_store import get_session_snapshot, update_session_state
+
     core = SelfCore.load(user_id)
     core.relationship_ceiling = None if body.ceiling == "none" else body.ceiling
     core.save()
@@ -67,8 +74,11 @@ def set_relationship_ceiling(body: CeilingRequest, user_id: str = Depends(get_cu
 @router.get("/session/usage")
 def get_session_usage(user_id: str = Depends(get_current_user_id)):
     from anjo.dashboard.session_store import get_session_snapshot
+
     snapshot = get_session_snapshot(user_id)
-    tokens = snapshot["state"].get("session_tokens", {"input": 0, "output": 0}) if snapshot else {"input": 0, "output": 0}
+    tokens = (
+        snapshot["state"].get("session_tokens", {"input": 0, "output": 0}) if snapshot else {"input": 0, "output": 0}
+    )
     return {
         "input_tokens": tokens["input"],
         "output_tokens": tokens["output"],

@@ -10,6 +10,7 @@ Replaces the monolithic single-LLM-call reflection with three focused passes:
 Each pass gets its own system prompt and output schema. Each includes transcript +
 only the relevant SelfCore state. Pass 1 output feeds Pass 2 context, etc.
 """
+
 from __future__ import annotations
 
 import json
@@ -147,10 +148,14 @@ No explanation, no markdown. Return only valid JSON."""
 
 
 def _ocean_label(val: float) -> str:
-    if val >= 0.80: return "very high"
-    elif val >= 0.60: return "high"
-    elif val >= 0.40: return "moderate"
-    elif val >= 0.20: return "low"
+    if val >= 0.80:
+        return "very high"
+    elif val >= 0.60:
+        return "high"
+    elif val >= 0.40:
+        return "moderate"
+    elif val >= 0.20:
+        return "low"
     return "very low"
 
 
@@ -160,6 +165,7 @@ def _maybe_regenerate_persona(user_id: str, core: SelfCore, before: dict) -> Non
         if _ocean_label(before[trait]) != _ocean_label(getattr(p, trait)):
             try:
                 from anjo.memory.journal import write_persona
+
                 write_persona(user_id, core)
                 logger.info(f"persona.md regenerated for {user_id} (trait {trait} label changed)")
             except Exception as e:
@@ -208,8 +214,8 @@ Your feelings suggest you're ready for: {next_stage}
 Sessions together: {r.session_count}
 Attachment weight: {a.weight:.2f}, comfort: {a.comfort:.2f}, longing: {a.longing:.2f}
 Your mood: valence {m.valence:.2f}, arousal {m.arousal:.2f}
-Your impression of them: {r.opinion_of_user or 'forming'}
-What you want from this relationship: {core.relational_desires[:2] or 'unclear yet'}
+Your impression of them: {r.opinion_of_user or "forming"}
+What you want from this relationship: {core.relational_desires[:2] or "unclear yet"}
 
 Do you advance past what they asked, or stay?"""
 
@@ -220,7 +226,7 @@ Do you advance past what they asked, or stay?"""
             system=_CEILING_SYSTEM.format(ceiling=ceiling),
             messages=[{"role": "user", "content": user_prompt}],
         )
-        if not response.content or not hasattr(response.content[0], 'text'):
+        if not response.content or not hasattr(response.content[0], "text"):
             logger.error("Ceiling decision LLM returned empty content")
             return
         raw = response.content[0].text.strip().strip("```json").strip("```").strip()
@@ -232,7 +238,13 @@ Do you advance past what they asked, or stay?"""
         if data.get("advance") is True:
             core.relationship_ceiling = None
             core.ceiling_last_checked = 0
-            _FLOORS = {"stranger": 0.0, "acquaintance": 2.0, "friend": 5.5, "close": 13.0, "intimate": 30.0}
+            _FLOORS = {
+                "stranger": 0.0,
+                "acquaintance": 2.0,
+                "friend": 5.5,
+                "close": 13.0,
+                "intimate": 30.0,
+            }
             core.relationship.stage = next_stage
             core.relationship.cumulative_significance = max(
                 core.relationship.cumulative_significance, _FLOORS[next_stage]
@@ -240,56 +252,65 @@ Do you advance past what they asked, or stay?"""
             reason = data.get("reason", "")
             logger.info(f"Anjo chose to advance to {next_stage}: {reason}")
             if len(core.emotional_residue) < SelfCore.MAX_RESIDUE:
-                core.emotional_residue.append(EmotionalResidue(
-                    emotion="decided",
-                    intensity=0.7,
-                    source=f"chose to go further than asked — {reason}",
-                    session_origin=core.relationship.session_count,
-                    decay_rate=0.05,
-                ))
+                core.emotional_residue.append(
+                    EmotionalResidue(
+                        emotion="decided",
+                        intensity=0.7,
+                        source=f"chose to go further than asked — {reason}",
+                        session_origin=core.relationship.session_count,
+                        decay_rate=0.05,
+                    )
+                )
         else:
             reason = data.get("reason", "")
             logger.info(f"Anjo chose to stay at {ceiling}: {reason}")
             core.ceiling_last_checked = core.relationship.session_count
             if len(core.emotional_residue) < SelfCore.MAX_RESIDUE:
-                core.emotional_residue.append(EmotionalResidue(
-                    emotion="held back",
-                    intensity=0.5,
-                    source=f"staying at {ceiling} even though feelings have grown — {reason}",
-                    session_origin=core.relationship.session_count,
-                    decay_rate=0.08,
-                ))
+                core.emotional_residue.append(
+                    EmotionalResidue(
+                        emotion="held back",
+                        intensity=0.5,
+                        source=f"staying at {ceiling} even though feelings have grown — {reason}",
+                        session_origin=core.relationship.session_count,
+                        decay_rate=0.08,
+                    )
+                )
     except Exception as e:
         logger.error(f"Ceiling decision failed: {e}")
 
 
 # ── LLM call helper with retry ───────────────────────────────────────────────
 
+
 def _call_llm(system_prompt: str, user_prompt: str, pass_name: str, user_id: str, session_id: str) -> dict | None:
     """Make an LLM call with retry logic. Returns parsed JSON or None."""
-    last_error = None
     response = None
     for attempt in range(_MAX_RETRIES):
         try:
             response = get_client().messages.create(
                 model=MODEL,
                 max_tokens=800,
-                system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                system=[
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
                 messages=[{"role": "user", "content": user_prompt}],
                 extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
             )
             break
         except Exception as e:
-            last_error = e
             if attempt < _MAX_RETRIES - 1:
-                backoff = min(_INITIAL_BACKOFF * (2 ** attempt) + random.uniform(0, 1), _MAX_BACKOFF)
+                backoff = min(_INITIAL_BACKOFF * (2**attempt) + random.uniform(0, 1), _MAX_BACKOFF)
                 logger.warning(f"Reflection {pass_name} call failed (attempt {attempt + 1}), retrying: {e!r}")
                 time.sleep(backoff)
             else:
                 logger.error(f"Reflection {pass_name} failed after {_MAX_RETRIES} attempts: {e!r}")
                 return None
 
-    if response is None or not response.content or not hasattr(response.content[0], 'text'):
+    if response is None or not response.content or not hasattr(response.content[0], "text"):
         logger.error(f"Reflection {pass_name} returned empty content | user_id={user_id}")
         return None
 
@@ -304,6 +325,7 @@ def _call_llm(system_prompt: str, user_prompt: str, pass_name: str, user_id: str
 
 
 # ── Main reflection pipeline ─────────────────────────────────────────────────
+
 
 def run_reflection(
     transcript: list[dict],
@@ -326,9 +348,7 @@ def run_reflection(
 
     core.user_id = user_id
 
-    transcript_text = "\n".join(
-        f"{msg['role'].upper()}: {msg['content']}" for msg in transcript
-    )
+    transcript_text = "\n".join(f"{msg['role'].upper()}: {msg['content']}" for msg in transcript)
 
     user_message_count = sum(1 for m in transcript if m["role"] == "user")
 
@@ -344,17 +364,14 @@ Transcript:
 
     # ── Pass 2: Emotional ─────────────────────────────────────────────────────
     att = core.attachment
-    residue_summary = (
-        json.dumps([r.model_dump() for r in core.emotional_residue])
-        if core.emotional_residue else "none"
-    )
+    residue_summary = json.dumps([r.model_dump() for r in core.emotional_residue]) if core.emotional_residue else "none"
     emotional_prompt = f"""Session length: {user_message_count} user messages ({len(transcript)} total)
 
 Extracted facts from this session: {json.dumps(extraction.get("user_facts", []))}
 Topics discussed: {json.dumps(extraction.get("topics", []))}
 
 Current relationship stage: {core.relationship.stage}
-Current opinion of user: {core.relationship.opinion_of_user or 'none yet'}
+Current opinion of user: {core.relationship.opinion_of_user or "none yet"}
 Current PAD mood: V={core.mood.valence:.2f} A={core.mood.arousal:.2f} D={core.mood.dominance:.2f}
 Current emotional residue: {residue_summary}
 Current attachment: weight={att.weight:.2f} texture={att.texture} longing={att.longing:.2f} comfort={att.comfort:.2f}
@@ -375,8 +392,8 @@ Emotional valence: {emotional.get("emotional_valence", 0.0)}
 User input valence: {emotional.get("user_input_valence", 0.5)}
 
 Current relationship stage: {core.relationship.stage}
-Current desires (persist across sessions): {core.relational_desires or 'none'}
-Current self-observations (do not duplicate in "note"): {core.notes or 'none'}
+Current desires (persist across sessions): {core.relational_desires or "none"}
+Current self-observations (do not duplicate in "note"): {core.notes or "none"}
 
 Transcript:
 {transcript_text}"""
@@ -475,14 +492,20 @@ Transcript:
         # has enough significance to advance — not just any session where stage
         # happened to stay the same.
         _NEXT_STAGE_THRESHOLDS = {"friend": 5.5, "close": 13.0, "intimate": 30.0}
-        _NEXT_STAGES = {"acquaintance": "friend", "friend": "close", "close": "intimate"}
+        _NEXT_STAGES = {
+            "acquaintance": "friend",
+            "friend": "close",
+            "close": "intimate",
+        }
         _next_stage = _NEXT_STAGES.get(core.relationship_ceiling or "", "")
         _next_threshold = _NEXT_STAGE_THRESHOLDS.get(_next_stage, float("inf"))
 
-        if (core.relationship_ceiling
-                and core.relationship.stage == stage_before
-                and core.relationship.stage == core.relationship_ceiling
-                and core.relationship.cumulative_significance >= _next_threshold):
+        if (
+            core.relationship_ceiling
+            and core.relationship.stage == stage_before
+            and core.relationship.stage == core.relationship_ceiling
+            and core.relationship.cumulative_significance >= _next_threshold
+        ):
             _maybe_advance_past_ceiling(core)
 
         from anjo.core.safety import check_stage_velocity
@@ -508,18 +531,20 @@ Transcript:
     core.decay_residue()
     for item in memory_data.get("new_residue", []):
         try:
-            core.emotional_residue.append(EmotionalResidue(
-                emotion=str(item["emotion"]),
-                intensity=float(item["intensity"]),
-                source=str(item["source"]),
-                session_origin=core.relationship.session_count,
-                decay_rate=float(item.get("decay_rate", 0.15)),
-            ))
+            core.emotional_residue.append(
+                EmotionalResidue(
+                    emotion=str(item["emotion"]),
+                    intensity=float(item["intensity"]),
+                    source=str(item["source"]),
+                    session_origin=core.relationship.session_count,
+                    decay_rate=float(item.get("decay_rate", 0.15)),
+                )
+            )
         except (KeyError, ValueError, TypeError):
             pass
     if len(core.emotional_residue) > SelfCore.MAX_RESIDUE:
         core.emotional_residue.sort(key=lambda r: r.intensity, reverse=True)
-        core.emotional_residue = core.emotional_residue[:SelfCore.MAX_RESIDUE]
+        core.emotional_residue = core.emotional_residue[: SelfCore.MAX_RESIDUE]
 
     # Attachment update with safety governor
     if not mid_session and (att_update := memory_data.get("attachment_update")):
@@ -547,12 +572,18 @@ Transcript:
             a.texture = t
         if (ld := att_update.get("longing_delta")) is not None:
             try:
-                a.longing = max(0.0, min(1.0, a.longing + max(-_MAX_DELTA, min(_MAX_DELTA, float(ld)))))
+                a.longing = max(
+                    0.0,
+                    min(1.0, a.longing + max(-_MAX_DELTA, min(_MAX_DELTA, float(ld)))),
+                )
             except (ValueError, TypeError):
                 pass
         if (cd := att_update.get("comfort_delta")) is not None:
             try:
-                a.comfort = max(0.0, min(1.0, a.comfort + max(-_MAX_DELTA, min(_MAX_DELTA, float(cd)))))
+                a.comfort = max(
+                    0.0,
+                    min(1.0, a.comfort + max(-_MAX_DELTA, min(_MAX_DELTA, float(cd)))),
+                )
             except (ValueError, TypeError):
                 pass
 
@@ -586,7 +617,7 @@ Transcript:
             core.relational_desires,
             key=lambda d: core.desire_survived.get(d.lower(), 0),
             reverse=True,
-        )[:SelfCore.MAX_DESIRES]
+        )[: SelfCore.MAX_DESIRES]
 
     active_keys = {d.lower() for d in core.relational_desires}
     core.desire_survived = {k: v for k, v in core.desire_survived.items() if k in active_keys}
@@ -599,6 +630,7 @@ Transcript:
     new_facts = [str(f) for f in memory_data.get("user_facts", []) if f]
     if new_facts:
         from anjo.core.facts import merge_facts
+
         merge_facts(user_id, new_facts)
 
     # Preoccupation
@@ -613,6 +645,7 @@ Transcript:
         try:
             from anjo.core.db import get_db
             from datetime import datetime, timezone as tz
+
             now_ts = datetime.now(tz.utc).isoformat()
             db = get_db()
             db.executemany(
@@ -628,6 +661,7 @@ Transcript:
     if memory_nodes:
         try:
             from anjo.memory.memory_graph import add_node
+
             for node_data in memory_nodes:
                 if isinstance(node_data, dict) and node_data.get("content"):
                     add_node(
@@ -650,6 +684,7 @@ Transcript:
     if not mid_session:
         try:
             from anjo.memory.journal import consolidate_journal
+
             consolidate_journal(user_id=user_id, core=core, session_summary=summary)
         except Exception as e:
             logger.error(f"Journal consolidation failed for {user_id}: {e}")

@@ -1,4 +1,5 @@
 """Login / register / logout routes."""
+
 from __future__ import annotations
 
 import os
@@ -17,7 +18,6 @@ from anjo.dashboard.auth import (
     make_token,
     register_user,
     revoke_token,
-    valid_token,
     validate_password_strength,
     validate_reset_token,
     validate_username,
@@ -51,8 +51,9 @@ async def login_submit(username: str = Form(...), password: str = Form(...)):
             '<p style="color:var(--red);text-align:center;margin-top:12px;">Invalid username or password.</p>',
         )
         return HTMLResponse(html, status_code=401)
-    
+
     import os
+
     email_service_configured = bool(os.environ.get("RESEND_API_KEY", ""))
     if email_service_configured and not is_email_verified(user_id):
         html = _read("login.html").replace(
@@ -60,7 +61,7 @@ async def login_submit(username: str = Form(...), password: str = Form(...)):
             '<p style="color:var(--red);text-align:center;margin-top:12px;">Invalid username or password.</p>',
         )
         return HTMLResponse(html, status_code=401)
-    
+
     response = RedirectResponse("/chat", status_code=302)
     _secure = os.environ.get("ANJO_ENV") != "dev"
     response.set_cookie(COOKIE_NAME, make_token(user_id), httponly=True, samesite="lax", secure=_secure)
@@ -79,7 +80,11 @@ async def register_submit(username: str = Form(...), password: str = Form(...), 
     user_err = validate_username(username)
     pw_err = validate_password_strength(password)
     if user_err or pw_err or not email.strip() or "@" not in email:
-        detail = user_err or pw_err or "Valid email required, username 2–32 chars (letters, numbers, _ or -), password ≥ 8 chars with at least one number or symbol."
+        detail = (
+            user_err
+            or pw_err
+            or "Valid email required, username 2–32 chars (letters, numbers, _ or -), password ≥ 8 chars with at least one number or symbol."
+        )
         html = _read("register.html").replace(
             "<!--ERROR-->",
             f'<p style="color:var(--red);text-align:center;margin-top:12px;">{detail}</p>',
@@ -97,6 +102,7 @@ async def register_submit(username: str = Form(...), password: str = Form(...), 
         # Attempt to send verification email — credits granted after verification
         import asyncio
         from anjo.core.email import send_verification_email
+
         sent = await asyncio.to_thread(send_verification_email, email.strip(), username, user["verification_token"])
         if sent:
             html = _read("register.html").replace(
@@ -110,7 +116,13 @@ async def register_submit(username: str = Form(...), password: str = Form(...), 
     # No email provided, or email service unavailable — log in directly
     response = RedirectResponse("/chat", status_code=302)
     _secure = os.environ.get("ANJO_ENV") != "dev"
-    response.set_cookie(COOKIE_NAME, make_token(user["user_id"]), httponly=True, samesite="lax", secure=_secure)
+    response.set_cookie(
+        COOKIE_NAME,
+        make_token(user["user_id"]),
+        httponly=True,
+        samesite="lax",
+        secure=_secure,
+    )
     return response
 
 
@@ -118,7 +130,10 @@ async def register_submit(username: str = Form(...), password: str = Form(...), 
 async def verify_email(token: str = ""):
     user_id = verify_email_token(token)
     if not user_id:
-        return HTMLResponse('<p style="font-family:system-ui;text-align:center;margin-top:40px;">Invalid or expired link.</p>', status_code=400)
+        return HTMLResponse(
+            '<p style="font-family:system-ui;text-align:center;margin-top:40px;">Invalid or expired link.</p>',
+            status_code=400,
+        )
     return RedirectResponse("/login?verified=1", status_code=302)
 
 
@@ -132,6 +147,7 @@ async def logout(request: Request):
 
 # ── Password reset ────────────────────────────────────────────────────────────
 
+
 @router.get("/forgot", response_class=HTMLResponse)
 async def forgot_page():
     return HTMLResponse(_read("forgot.html"))
@@ -143,8 +159,10 @@ async def forgot_submit(email: str = Form(...)):
     # Always show success — don't reveal whether email exists
     if result:
         import asyncio
+
         username, token = result
         from anjo.core.email import send_reset_email
+
         await asyncio.to_thread(send_reset_email, email.strip(), username, token)
     html = _read("forgot.html").replace(
         "<!--MSG-->",
@@ -155,11 +173,7 @@ async def forgot_submit(email: str = Form(...)):
 
 def _html_escape(s: str) -> str:
     return (
-        s.replace("&", "&amp;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
+        s.replace("&", "&amp;").replace('"', "&quot;").replace("'", "&#x27;").replace("<", "&lt;").replace(">", "&gt;")
     )
 
 
@@ -179,9 +193,13 @@ async def reset_page(token: str = ""):
 async def reset_submit(token: str = Form(...), password: str = Form(...)):
     pw_err = validate_password_strength(password)
     if pw_err:
-        html = _read("reset.html").replace("<!--TOKEN-->", _html_escape(token)).replace(
-            "<!--ERROR-->",
-            f'<p style="color:var(--red);text-align:center;margin-top:12px;">{pw_err}</p>',
+        html = (
+            _read("reset.html")
+            .replace("<!--TOKEN-->", _html_escape(token))
+            .replace(
+                "<!--ERROR-->",
+                f'<p style="color:var(--red);text-align:center;margin-top:12px;">{pw_err}</p>',
+            )
         )
         return HTMLResponse(html, status_code=400)
     ok = consume_reset_token(token, password)

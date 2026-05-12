@@ -1,4 +1,5 @@
 """SQLite database — per-thread WAL-mode connections with connection pool."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -230,10 +231,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
 
     for col in ("email_hmac", "reset_token_hmac", "verification_token_hmac"):
         try:
-            conn.execute(
-                f"CREATE UNIQUE INDEX IF NOT EXISTS idx_users_{col} ON users({col}) "
-                f"WHERE {col} != ''"
-            )
+            conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_users_{col} ON users({col}) WHERE {col} != ''")
             conn.commit()
         except sqlite3.OperationalError as exc:
             if not _already_exists(exc):

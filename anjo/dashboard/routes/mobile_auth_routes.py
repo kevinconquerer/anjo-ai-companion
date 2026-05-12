@@ -1,4 +1,5 @@
 """Mobile auth endpoints — JSON login/register that return Bearer tokens."""
+
 from __future__ import annotations
 
 import asyncio
@@ -57,15 +58,21 @@ async def mobile_register(body: RegisterRequest):
     if user_err or pw_err or not body.email.strip() or "@" not in body.email:
         raise HTTPException(
             status_code=400,
-            detail=user_err or pw_err or "Valid email required, username 2–32 chars (letters, numbers, _ or -), password ≥ 8 chars with at least one number or symbol",
+            detail=user_err
+            or pw_err
+            or "Valid email required, username 2–32 chars (letters, numbers, _ or -), password ≥ 8 chars with at least one number or symbol",
         )
     user, err = register_user(body.username, body.password, body.email)
     if not user:
-        raise HTTPException(status_code=409, detail="An account with that username or email already exists")
+        raise HTTPException(
+            status_code=409,
+            detail="An account with that username or email already exists",
+        )
 
     email = body.email.strip()
     if email and not user.get("email_verified"):
         from anjo.core.email import send_verification_email
+
         sent = await asyncio.to_thread(send_verification_email, email, body.username, user["verification_token"])
         if sent:
             return {"message": "Check your email to verify your account."}

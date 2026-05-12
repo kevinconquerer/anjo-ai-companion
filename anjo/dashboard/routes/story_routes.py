@@ -1,7 +1,7 @@
 """Our story routes — memories, session history, and letter from Anjo."""
+
 from __future__ import annotations
 
-import json
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,15 +26,19 @@ _GENERATING_LOCK = threading.Lock()
 
 
 def _load_letter_cache(user_id: str) -> dict | None:
-    row = get_db().execute(
-        "SELECT letter, generated_at, trust_at_generation FROM letter_cache WHERE user_id = ?",
-        (user_id,),
-    ).fetchone()
+    row = (
+        get_db()
+        .execute(
+            "SELECT letter, generated_at, trust_at_generation FROM letter_cache WHERE user_id = ?",
+            (user_id,),
+        )
+        .fetchone()
+    )
     return dict(row) if row else None
 
 
 def _save_letter_cache(user_id: str, letter: str, trust: float) -> None:
-    db  = get_db()
+    db = get_db()
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
         "INSERT INTO letter_cache (user_id, letter, generated_at, trust_at_generation) VALUES (?, ?, ?, ?) "
@@ -65,15 +69,9 @@ def _generate_letter(core: SelfCore) -> str:
     if r.opinion_of_user:
         parts.append(f"Your understanding of this person: {r.opinion_of_user}")
     if core.notes:
-        parts.append(
-            "Things Anjo has noticed about itself in this relationship:\n- "
-            + "\n- ".join(core.notes[-5:])
-        )
+        parts.append("Things Anjo has noticed about itself in this relationship:\n- " + "\n- ".join(core.notes[-5:]))
     if core.relational_desires:
-        parts.append(
-            "Things Anjo wants with/for this person:\n- "
-            + "\n- ".join(core.relational_desires)
-        )
+        parts.append("Things Anjo wants with/for this person:\n- " + "\n- ".join(core.relational_desires))
     if att.texture:
         parts.append(f"How Anjo would describe the connection: {att.texture}")
     if att.longing > 0.1:
@@ -106,8 +104,7 @@ def get_memories(user_id: str = Depends(get_current_user_id)):
     return {
         "opinion": r.opinion_of_user,
         "emotional_residue": [
-            {"emotion": er.emotion, "intensity": er.intensity, "source": er.source}
-            for er in core.emotional_residue
+            {"emotion": er.emotion, "intensity": er.intensity, "source": er.source} for er in core.emotional_residue
         ],
         "desires": core.relational_desires,
         "attachment": {
@@ -130,10 +127,7 @@ def get_memories(user_id: str = Depends(get_current_user_id)):
 def get_sessions(user_id: str = Depends(get_current_user_id)):
     entries = read_log(user_id, limit=100)
     # Full sessions only, most recent first
-    sessions = [
-        e for e in reversed(entries)
-        if not e.get("mid_session") and e.get("summary")
-    ]
+    sessions = [e for e in reversed(entries) if not e.get("mid_session") and e.get("summary")]
     return {"sessions": sessions}
 
 
@@ -151,8 +145,7 @@ def get_letter(user_id: str = Depends(get_current_user_id)):
     if cache:
         try:
             age_days = (
-                datetime.now(timezone.utc)
-                - datetime.fromisoformat(cache["generated_at"])
+                datetime.now(timezone.utc) - datetime.fromisoformat(cache["generated_at"])
             ).total_seconds() / 86400
             trust_drift = abs(trust - cache.get("trust_at_generation", 0.0))
             needs_regen = age_days > _LETTER_REGEN_DAYS or trust_drift > _LETTER_REGEN_DELTA
@@ -165,7 +158,10 @@ def get_letter(user_id: str = Depends(get_current_user_id)):
                 # Another request is already generating — serve stale cache or wait-and-retry hint
                 if cache and cache.get("letter"):
                     return {"locked": False, "letter": cache["letter"]}
-                raise HTTPException(status_code=503, detail="Letter is being generated, try again shortly")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Letter is being generated, try again shortly",
+                )
             _GENERATING_LETTER.add(user_id)
         try:
             letter = _generate_letter(core)
@@ -185,6 +181,7 @@ def get_letter(user_id: str = Depends(get_current_user_id)):
 
 
 # ── Memory graph endpoints ────────────────────────────────────────────────────
+
 
 @router.get("/story/memory-graph")
 def get_memory_graph(user_id: str = Depends(get_current_user_id)):
@@ -232,6 +229,7 @@ def bulk_delete_memory_nodes(
 ):
     """Bulk delete memory nodes by date range. Used for emotional node deletion."""
     import re
+
     _iso_date = re.compile(r"^\d{4}-\d{2}-\d{2}")
     if not _iso_date.match(start_date) or not _iso_date.match(end_date):
         raise HTTPException(400, "start_date and end_date must be ISO format (YYYY-MM-DD)")
@@ -239,4 +237,3 @@ def bulk_delete_memory_nodes(
 
     count = delete_nodes_by_date_range(user_id, start_date, end_date)
     return {"ok": True, "deleted_count": count}
-

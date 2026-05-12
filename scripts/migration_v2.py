@@ -14,6 +14,7 @@ Usage:
     python scripts/migration_v2.py
     python scripts/migration_v2.py --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -107,7 +108,8 @@ def migrate(dry_run: bool = False) -> None:
             "notes": data.get("notes", []),
             "emotional_residue": data.get("emotional_residue", []),
             "attachment": {
-                k: v for k, v in data.get("attachment", {}).items()
+                k: v
+                for k, v in data.get("attachment", {}).items()
                 if k != "weight_history"  # new field, not in legacy
             },
             "relational_desires": data.get("relational_desires", []),

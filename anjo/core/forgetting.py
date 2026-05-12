@@ -1,4 +1,5 @@
 """Negotiated forgetting — user requests data deletion, Anjo decides what to release."""
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,8 @@ def negotiate_and_forget(user_id: str) -> str:
 
     residue_text = (
         "; ".join(f"{res.emotion} ({res.intensity:.2f})" for res in core.emotional_residue)
-        if core.emotional_residue else "none"
+        if core.emotional_residue
+        else "none"
     )
 
     user_prompt = f"""This person is asking you to forget them.
@@ -73,8 +75,8 @@ Your current state:
 - Relationship: {r.stage} ({r.session_count} sessions together)
 - Attachment: {a.weight:.2f} weight, {a.longing:.2f} longing, {a.comfort:.2f} comfort
 - Emotional residue carrying forward: {residue_text}
-- Your impression of them: {r.opinion_of_user or 'still forming'}
-- What you want from this relationship: {'; '.join(core.relational_desires[:2]) or 'unclear yet'}
+- Your impression of them: {r.opinion_of_user or "still forming"}
+- What you want from this relationship: {"; ".join(core.relational_desires[:2]) or "unclear yet"}
 
 What do you choose to release? What honestly stays?"""
 
@@ -109,10 +111,12 @@ What do you choose to release? What honestly stays?"""
 
     # ── Always delete raw data ─────────────────────────────────────────────
     from anjo.core.history import clear as clear_history
+
     clear_history(user_id)
 
     try:
         from anjo.memory.long_term import _get_collections
+
         semantic_col, emotional_col = _get_collections()
         for col in (semantic_col, emotional_col):
             try:
@@ -127,6 +131,7 @@ What do you choose to release? What honestly stays?"""
     # Clear reflection log (session timeline)
     try:
         from anjo.reflection.log import _log_path
+
         _log_path(user_id).unlink(missing_ok=True)
     except Exception as e:
         logger.error(f"Reflection log deletion failed: {e}")
@@ -134,6 +139,7 @@ What do you choose to release? What honestly stays?"""
     # Clear letter cache and extracted facts
     try:
         from anjo.core.db import get_db
+
         db = get_db()
         db.execute("DELETE FROM letter_cache WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM facts WHERE user_id = ?", (user_id,))
@@ -184,6 +190,7 @@ What do you choose to release? What honestly stays?"""
     # ── Reset live session so it reloads from updated SelfCore ─────────────
     try:
         from anjo.dashboard.session_store import delete_session
+
         delete_session(user_id)
     except Exception as e:
         logger.error(f"Session reset failed: {e}")
@@ -203,6 +210,7 @@ def _complete_deletion(user_id: str, user_dir: Path, marker: Path) -> None:
 
     try:
         from anjo.memory.long_term import _get_collections
+
         semantic_col, emotional_col = _get_collections()
         for col in (semantic_col, emotional_col):
             try:
@@ -216,12 +224,14 @@ def _complete_deletion(user_id: str, user_dir: Path, marker: Path) -> None:
 
     try:
         from anjo.reflection.log import _log_path
+
         _log_path(user_id).unlink(missing_ok=True)
     except Exception as e:
         logger.error(f"Reflection log deletion failed: {e}")
 
     try:
         from anjo.core.db import get_db
+
         db = get_db()
         db.execute("DELETE FROM letter_cache WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM facts WHERE user_id = ?", (user_id,))

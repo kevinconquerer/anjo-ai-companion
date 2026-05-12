@@ -34,6 +34,17 @@ test = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
 ]
+dev = [
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# E402: imports after load_dotenv() / env reads — intentional throughout the codebase
+# E741: OCEAN model uses single-letter field names (O, C, E, A, N) — domain convention
+ignore = ["E402", "E741"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

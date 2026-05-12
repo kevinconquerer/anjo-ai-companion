@@ -1,4 +1,5 @@
 """Anjo Dashboard — FastAPI application."""
+
 from __future__ import annotations
 
 import asyncio
@@ -67,6 +68,7 @@ async def lifespan(_: FastAPI):
 
     # Verify encryption key is properly configured before serving
     from anjo.core.crypto import verify_production_key
+
     verify_production_key()
 
     # Recover sessions from SQLite — sessions now survive server restarts
@@ -76,6 +78,7 @@ async def lifespan(_: FastAPI):
 
     # Load revoked tokens from DB so logout survives restarts
     from anjo.dashboard.auth import load_revoked_tokens_from_db
+
     load_revoked_tokens_from_db()
 
     count = process_all_pending()
@@ -83,7 +86,7 @@ async def lifespan(_: FastAPI):
         logger.info(f"Caught up on {count} pending transcript(s)")
 
     inactivity_task = asyncio.create_task(_inactivity_watcher())
-    drift_task      = asyncio.create_task(_drift_watcher())
+    drift_task = asyncio.create_task(_drift_watcher())
     yield
     inactivity_task.cancel()
     drift_task.cancel()
@@ -121,8 +124,8 @@ cors_origins = (
     else [
         "https://anjo.love",
         "http://localhost:8081",  # Expo dev
-        "http://localhost:19000", # Expo dev
-        "http://localhost:19001", # Expo dev
+        "http://localhost:19000",  # Expo dev
+        "http://localhost:19001",  # Expo dev
         "http://localhost:8000",  # Web dev
     ]
 )
@@ -139,6 +142,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 
 from anjo.dashboard.routes.mobile_auth_routes import router as mobile_auth_router
+
 app.include_router(admin_router)
 app.include_router(mobile_auth_router, prefix="/api/auth")
 app.include_router(auth_router)
@@ -192,7 +196,6 @@ async def terms():
     return FileResponse(STATIC_DIR / "terms.html")
 
 
-
 @app.get("/dev")
 async def dev(request: Request):
     return RedirectResponse("/chat", status_code=302)
@@ -212,6 +215,7 @@ async def debug(request: Request):
 
 def run() -> None:
     import uvicorn
+
     dev = os.environ.get("ANJO_ENV", "dev") == "dev"
     uvicorn.run(
         "anjo.dashboard.app:app",

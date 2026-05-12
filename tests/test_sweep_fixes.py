@@ -7,6 +7,7 @@ Tests cover:
   - Token verification with DB user check
   - Letter generation lock consistency
 """
+
 from __future__ import annotations
 
 import threading
@@ -24,8 +25,11 @@ class TestDeleteSessionLock:
     def test_delete_session_thread_safe(self):
         """Concurrent deletes and reads should not raise."""
         from anjo.dashboard.session_store import (
-            _sessions, _sessions_lock, delete_session,
+            _sessions,
+            _sessions_lock,
+            delete_session,
         )
+
         # Set up a session manually
         with _sessions_lock:
             _sessions["lock-test-user"] = {
@@ -51,9 +55,7 @@ class TestDeleteSessionLock:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=_delete)] + [
-            threading.Thread(target=_read) for _ in range(5)
-        ]
+        threads = [threading.Thread(target=_delete)] + [threading.Thread(target=_read) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -67,7 +69,11 @@ class TestCreateSessionNoIOUnderLock:
 
     def test_facts_and_trends_passed_not_loaded(self):
         """Facts and trends should be pre-loaded and passed, not loaded inside."""
-        from anjo.dashboard.session_store import _create_session, _sessions, _sessions_lock
+        from anjo.dashboard.session_store import (
+            _create_session,
+            _sessions,
+            _sessions_lock,
+        )
 
         test_facts = ["likes jazz", "works in finance"]
         test_trends = ["AI", "music"]
@@ -88,7 +94,11 @@ class TestCreateSessionNoIOUnderLock:
 
     def test_default_empty_when_no_facts_passed(self):
         """When no cached data passed, defaults to empty lists."""
-        from anjo.dashboard.session_store import _create_session, _sessions, _sessions_lock
+        from anjo.dashboard.session_store import (
+            _create_session,
+            _sessions,
+            _sessions_lock,
+        )
 
         with _sessions_lock:
             _create_session(
@@ -109,13 +119,16 @@ class TestResetSessionLockDiscipline:
     def test_reset_on_nonexistent_session(self):
         """reset_session on a missing user should return without error."""
         from anjo.dashboard.session_store import reset_session
+
         # Should not raise
         reset_session("nonexistent-user-12345")
 
     def test_reset_clears_history(self):
         """reset_session should clear conversation history."""
         from anjo.dashboard.session_store import (
-            _sessions, _sessions_lock, reset_session,
+            _sessions,
+            _sessions_lock,
+            reset_session,
         )
         from anjo.core.self_core import SelfCore
 
@@ -194,6 +207,7 @@ class TestAdminChatPrivacy:
 
         # Insert a chat message
         from anjo.core.history import append_message
+
         append_message(uid, "user", "this is private content")
 
         r = auth_client.get(
@@ -222,6 +236,7 @@ class TestAdminChatPrivacy:
         uid = row["user_id"]
 
         from anjo.core.history import append_message
+
         append_message(uid, "user", "visible content here")
 
         r = auth_client.get(
@@ -244,6 +259,7 @@ class TestTokenDBCheck:
     def test_token_rejected_after_account_deleted(self):
         """A valid token should be rejected if the user no longer exists in DB."""
         from anjo.dashboard.auth import make_token, verify_token
+
         # Token for non-existent user — DB lookup returns None → reject
         token = make_token("deleted-user-99999")
         assert verify_token(token) is None
@@ -274,7 +290,10 @@ class TestLetterGenerationLock:
 
     def test_concurrent_letter_access(self):
         """Concurrent add/discard should not corrupt the set."""
-        from anjo.dashboard.routes.story_routes import _GENERATING_LETTER, _GENERATING_LOCK
+        from anjo.dashboard.routes.story_routes import (
+            _GENERATING_LETTER,
+            _GENERATING_LOCK,
+        )
 
         errors = []
 
@@ -307,6 +326,7 @@ class TestSelfCoreUserIdSafety:
     def test_save_rejects_default_user_id(self):
         """SelfCore with user_id='default' should raise ValueError on save."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         assert core.user_id == "default"
         with pytest.raises(ValueError, match="user_id='default'"):
@@ -315,6 +335,7 @@ class TestSelfCoreUserIdSafety:
     def test_from_state_restores_user_id(self):
         """SelfCore.from_state() must set user_id correctly."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         state = core.model_dump()
         restored = SelfCore.from_state(state, "real-user-123")
@@ -330,6 +351,7 @@ class TestPADMoodBounds:
     def test_extreme_abuse_stays_bounded(self):
         """Repeated ABUSE appraisals should not push mood outside [-1, 1]."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         core.user_id = "bounds-test"
 
@@ -343,6 +365,7 @@ class TestPADMoodBounds:
     def test_extreme_positive_stays_bounded(self):
         """Repeated positive appraisals should not push mood above 1.0."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         core.user_id = "bounds-test-pos"
 
@@ -363,6 +386,7 @@ class TestOCEANBounds:
     def test_inertia_stays_bounded(self):
         """apply_inertia should never push traits outside [0, 1]."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         core.user_id = "ocean-bounds"
 
@@ -393,6 +417,7 @@ class TestAttachmentSafety:
     def test_weight_capped_at_session_pace(self):
         """Attachment weight cannot exceed session_count * 0.075."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         core.user_id = "att-cap-test"
         core.relationship.session_count = 2  # max weight = 0.15
@@ -406,6 +431,7 @@ class TestAttachmentSafety:
     def test_weight_stays_in_bounds(self):
         """Attachment weight must stay in [0, 1]."""
         from anjo.core.self_core import SelfCore
+
         core = SelfCore()
         assert 0.0 <= core.attachment.weight <= 1.0
         assert 0.0 <= core.attachment.longing <= 1.0

@@ -5,6 +5,7 @@ Three modes (picked at import time):
   2. Bedrock/boto3 — CLAUDE_CODE_USE_BEDROCK=1 but no bearer token → AnthropicBedrock
   3. Standard API  — ANTHROPIC_API_KEY → anthropic.Anthropic
 """
+
 from __future__ import annotations
 
 import base64
@@ -18,18 +19,19 @@ import anthropic
 
 # ── Mode detection ────────────────────────────────────────────────────────────
 _BEARER_TOKEN = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "")
-USE_BEDROCK   = os.environ.get("CLAUDE_CODE_USE_BEDROCK", "0") == "1"
-_AWS_REGION   = os.environ.get("AWS_REGION", "us-east-1")
+USE_BEDROCK = os.environ.get("CLAUDE_CODE_USE_BEDROCK", "0") == "1"
+_AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 if USE_BEDROCK:
-    MODEL            = os.environ.get("ANTHROPIC_MEDIUM_MODEL", "us.anthropic.claude-sonnet-4-6")
+    MODEL = os.environ.get("ANTHROPIC_MEDIUM_MODEL", "us.anthropic.claude-sonnet-4-6")
     MODEL_BACKGROUND = os.environ.get("ANTHROPIC_SMALL_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 else:
-    MODEL            = "claude-sonnet-4-6"
+    MODEL = "claude-sonnet-4-6"
     MODEL_BACKGROUND = "claude-haiku-4-5-20251001"
 
 
 # ── Bearer-token Bedrock client ───────────────────────────────────────────────
+
 
 def _bedrock_url(model: str, stream: bool) -> str:
     suffix = "invoke-with-response-stream" if stream else "invoke"
@@ -55,11 +57,11 @@ def _parse_eventstream(raw: bytes):
     while offset < len(raw):
         if offset + 12 > len(raw):
             break
-        total_len   = struct.unpack(">I", raw[offset:offset + 4])[0]
-        headers_len = struct.unpack(">I", raw[offset + 4:offset + 8])[0]
+        total_len = struct.unpack(">I", raw[offset : offset + 4])[0]
+        headers_len = struct.unpack(">I", raw[offset + 4 : offset + 8])[0]
         if total_len < 16 or offset + total_len > len(raw):
             break
-        payload_bytes = raw[offset + 12 + headers_len: offset + total_len - 4]
+        payload_bytes = raw[offset + 12 + headers_len : offset + total_len - 4]
         if payload_bytes:
             try:
                 wrapper = json.loads(payload_bytes)
@@ -76,7 +78,7 @@ def _parse_eventstream(raw: bytes):
 
 class _SimpleUsage:
     def __init__(self, input_tokens: int, output_tokens: int):
-        self.input_tokens  = input_tokens
+        self.input_tokens = input_tokens
         self.output_tokens = output_tokens
 
 
@@ -88,23 +90,32 @@ class _SimpleContent:
 class _SimpleMessage:
     def __init__(self, text: str, usage: _SimpleUsage):
         self.content = [_SimpleContent(text)]
-        self.usage   = usage
+        self.usage = usage
 
 
 class _StreamContext:
     """Context manager matching the anthropic MessageStreamManager interface."""
 
-    def __init__(self, token: str, model: str, max_tokens: int, system, messages: list, thinking=None, **_):
-        self._token      = token
-        self._model      = model
+    def __init__(
+        self,
+        token: str,
+        model: str,
+        max_tokens: int,
+        system,
+        messages: list,
+        thinking=None,
+        **_,
+    ):
+        self._token = token
+        self._model = model
         self._max_tokens = max_tokens
-        self._system     = system
-        self._messages   = messages
-        self._thinking   = thinking
+        self._system = system
+        self._messages = messages
+        self._thinking = thinking
         self._chunks: list[str] = []
-        self._input_tok  = 0
+        self._input_tok = 0
         self._output_tok = 0
-        self._fetched    = False
+        self._fetched = False
 
     def __enter__(self):
         self._fetch()
@@ -133,7 +144,10 @@ class _StreamContext:
         req = urllib.request.Request(
             _bedrock_url(self._model, stream=True),
             data=payload,
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._token}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._token}",
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
@@ -166,7 +180,15 @@ class _BearerMessages:
     def __init__(self, token: str):
         self._token = token
 
-    def create(self, model: str, max_tokens: int, system=None, messages=None, thinking=None, **_):
+    def create(
+        self,
+        model: str,
+        max_tokens: int,
+        system=None,
+        messages=None,
+        thinking=None,
+        **_,
+    ):
         body: dict = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": max_tokens,
@@ -182,17 +204,31 @@ class _BearerMessages:
         req = urllib.request.Request(
             _bedrock_url(model, stream=False),
             data=payload,
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._token}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._token}",
+            },
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
 
-        text  = data["content"][0]["text"] if data.get("content") else ""
+        text = data["content"][0]["text"] if data.get("content") else ""
         usage = data.get("usage", {})
-        return _SimpleMessage(text, _SimpleUsage(usage.get("input_tokens", 0), usage.get("output_tokens", 0)))
+        return _SimpleMessage(
+            text,
+            _SimpleUsage(usage.get("input_tokens", 0), usage.get("output_tokens", 0)),
+        )
 
-    def stream(self, model: str, max_tokens: int, system=None, messages=None, thinking=None, **kwargs):
+    def stream(
+        self,
+        model: str,
+        max_tokens: int,
+        system=None,
+        messages=None,
+        thinking=None,
+        **kwargs,
+    ):
         return _StreamContext(self._token, model, max_tokens, system, messages or [], thinking=thinking)
 
 
@@ -202,6 +238,7 @@ class _BearerClient:
 
 
 # ── Boto3 Bedrock wrapper (strips incompatible params) ────────────────────────
+
 
 class _BedrockWrappedMessages:
     """Wraps AnthropicBedrock.messages to strip params Bedrock doesn't support."""
@@ -251,9 +288,7 @@ def get_client():
                 if USE_BEDROCK and _BEARER_TOKEN:
                     _client = _BearerClient(_BEARER_TOKEN)
                 elif USE_BEDROCK:
-                    _client = _BedrockWrappedClient(
-                        anthropic.AnthropicBedrock(aws_region=_AWS_REGION, max_retries=3)
-                    )
+                    _client = _BedrockWrappedClient(anthropic.AnthropicBedrock(aws_region=_AWS_REGION, max_retries=3))
                 else:
                     api_key = os.environ.get("ANTHROPIC_API_KEY")
                     if not api_key:

@@ -8,6 +8,7 @@ Validates the full store → query → recall pipeline:
 - Episode bonus: specific moments outrank session summaries for same content
 - Last-session anchor: get_last_session_summary returns the most recent one
 """
+
 from __future__ import annotations
 
 import uuid
@@ -18,6 +19,7 @@ import pytest
 def isolate_chroma(tmp_path, monkeypatch):
     """Redirect ChromaDB to a throwaway temp dir and reset the global client."""
     import anjo.memory.long_term as lt
+
     monkeypatch.setattr(lt, "_DATA_ROOT", tmp_path)
     monkeypatch.setattr(lt, "_client", None)
     yield
@@ -26,6 +28,7 @@ def isolate_chroma(tmp_path, monkeypatch):
 
 def _store(summary: str, topics: list[str], user_id: str, memory_type: str = "session") -> str:
     from anjo.memory.long_term import store_memory
+
     mem_id = str(uuid.uuid4())
     store_memory(
         memory_id=mem_id,
@@ -44,12 +47,17 @@ def _store(summary: str, topics: list[str], user_id: str, memory_type: str = "se
 
 # ── Basic recall ──────────────────────────────────────────────────────────────
 
+
 def test_stored_fact_is_retrievable():
     """A fact stored in memory should come back when queried on the same topic."""
     from anjo.memory.long_term import query_memories
 
     user = "user_basic"
-    _store("The user is a software engineer who loves hiking on weekends.", ["work", "hiking"], user)
+    _store(
+        "The user is a software engineer who loves hiking on weekends.",
+        ["work", "hiking"],
+        user,
+    )
 
     results = query_memories("What does the user do for work?", user)
 
@@ -68,6 +76,7 @@ def test_no_memories_returns_empty():
 
 # ── User isolation ─────────────────────────────────────────────────────────────
 
+
 def test_memories_do_not_leak_across_users():
     """Querying as a different user must return nothing from another user's memories."""
     from anjo.memory.long_term import query_memories
@@ -80,25 +89,33 @@ def test_memories_do_not_leak_across_users():
 
 # ── Ranking ────────────────────────────────────────────────────────────────────
 
+
 def test_most_relevant_memory_ranks_first():
     """When multiple memories exist, the one closest to the query topic should rank highest."""
     from anjo.memory.long_term import query_memories
 
     user = "user_rank"
-    _store("The user enjoys cooking Italian food and trying new recipes.", ["cooking", "food"], user)
-    _store("The user recently started learning Spanish on Duolingo.", ["language", "learning"], user)
+    _store(
+        "The user enjoys cooking Italian food and trying new recipes.",
+        ["cooking", "food"],
+        user,
+    )
+    _store(
+        "The user recently started learning Spanish on Duolingo.",
+        ["language", "learning"],
+        user,
+    )
     _store("The user has a golden retriever named Max.", ["pets", "dog"], user)
 
     results = query_memories("Does the user have any pets?", user)
 
     assert results, "Expected results"
     _, top_text = results[0]
-    assert "Max" in top_text or "golden retriever" in top_text, (
-        f"Expected the pet memory at top, got: {top_text[:80]}"
-    )
+    assert "Max" in top_text or "golden retriever" in top_text, f"Expected the pet memory at top, got: {top_text[:80]}"
 
 
 # ── Episode bonus ──────────────────────────────────────────────────────────────
+
 
 def test_episode_scores_higher_than_session_for_same_content():
     """Episode-type memories should outscore session-type memories on the same content."""
@@ -121,6 +138,7 @@ def test_episode_scores_higher_than_session_for_same_content():
 
 # ── Last-session anchor ────────────────────────────────────────────────────────
 
+
 def test_get_last_session_summary_returns_most_recent():
     """get_last_session_summary should return the latest session-type memory."""
     from anjo.memory.long_term import store_memory, get_last_session_summary
@@ -131,10 +149,14 @@ def test_get_last_session_summary_returns_most_recent():
     store_memory(
         memory_id=str(uuid.uuid4()),
         summary="First session: user introduced themselves.",
-        emotional_tone="warm", emotional_valence=0.3,
-        topics=["intro"], significance=0.5,
-        user_id=user, session_id="s1",
-        relationship_stage="stranger", memory_type="session",
+        emotional_tone="warm",
+        emotional_valence=0.3,
+        topics=["intro"],
+        significance=0.5,
+        user_id=user,
+        session_id="s1",
+        relationship_stage="stranger",
+        memory_type="session",
     )
 
     # Small sleep to ensure distinct timestamps
@@ -143,10 +165,14 @@ def test_get_last_session_summary_returns_most_recent():
     store_memory(
         memory_id=str(uuid.uuid4()),
         summary="Second session: user talked about their fear of flying.",
-        emotional_tone="tense", emotional_valence=-0.4,
-        topics=["fear", "travel"], significance=0.7,
-        user_id=user, session_id="s2",
-        relationship_stage="acquaintance", memory_type="session",
+        emotional_tone="tense",
+        emotional_valence=-0.4,
+        topics=["fear", "travel"],
+        significance=0.7,
+        user_id=user,
+        session_id="s2",
+        relationship_stage="acquaintance",
+        memory_type="session",
     )
 
     summary = get_last_session_summary(user)
@@ -164,10 +190,14 @@ def test_get_last_session_summary_ignores_episodes():
     store_memory(
         memory_id=str(uuid.uuid4()),
         summary="Session summary: overall a good conversation.",
-        emotional_tone="warm", emotional_valence=0.5,
-        topics=["general"], significance=0.6,
-        user_id=user, session_id="s1",
-        relationship_stage="acquaintance", memory_type="session",
+        emotional_tone="warm",
+        emotional_valence=0.5,
+        topics=["general"],
+        significance=0.6,
+        user_id=user,
+        session_id="s1",
+        relationship_stage="acquaintance",
+        memory_type="session",
     )
 
     time.sleep(0.05)
@@ -176,10 +206,14 @@ def test_get_last_session_summary_ignores_episodes():
     store_memory(
         memory_id=str(uuid.uuid4()),
         summary="Specific moment: user laughed at a joke about penguins.",
-        emotional_tone="playful", emotional_valence=0.8,
-        topics=["humor"], significance=0.3,
-        user_id=user, session_id="s1",
-        relationship_stage="acquaintance", memory_type="episode",
+        emotional_tone="playful",
+        emotional_valence=0.8,
+        topics=["humor"],
+        significance=0.3,
+        user_id=user,
+        session_id="s1",
+        relationship_stage="acquaintance",
+        memory_type="episode",
     )
 
     summary = get_last_session_summary(user)
@@ -189,6 +223,7 @@ def test_get_last_session_summary_ignores_episodes():
 
 
 # ── Score thresholds ───────────────────────────────────────────────────────────
+
 
 def test_query_on_matching_topic_scores_above_threshold():
     """Topically relevant memories should clear the 0.5 certainty threshold."""
